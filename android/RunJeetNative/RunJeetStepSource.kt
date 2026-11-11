@@ -38,7 +38,7 @@ class RunJeetStepSource(
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
         val totalSinceBoot = event.values[0]
-        val bootId = android.os.SystemClock.elapsedRealtime().toLong()
+        val bootId = android.provider.Settings.Global.getInt(app.contentResolver, "boot_count", 0).toLong()
         val savedBoot = prefs.getLong("boot_marker", -1L)
         if (savedBoot != bootId || bootBaseline < 0f) {
             bootBaseline = totalSinceBoot
