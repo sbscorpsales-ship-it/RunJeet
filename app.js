@@ -71,7 +71,7 @@ window.addEventListener("runjeetNativeSteps",e=>{
  if(!Number.isSafeInteger(n)||n<0)return;
  const priority=s=>s.includes("HEALTH")?2:1;
  if(nativeDailySteps!==null&&priority(source)<priority(nativeStepSource||""))return;
- nativeDailySteps=n;nativeStepSource=source;render();
+ nativeDailySteps=n;nativeStepSource=source;state.nativeStepsByDay=state.nativeStepsByDay||{};state.nativeStepsByDay[day()]={count:n,source,updatedAt:new Date().toISOString()};if(motionHandler){window.removeEventListener("devicemotion",motionHandler);motionHandler=null;}save().catch(()=>toast("Step total could not be saved"));render();
  $("stepMessage").textContent="Daily steps from "+source.toLowerCase();
 });
 window.addEventListener("pagehide",()=>{stopWatch();if(state?.active&&!state.active.pausedAt){state.active.pausedAt=Date.now();save().catch(()=>{})}});
