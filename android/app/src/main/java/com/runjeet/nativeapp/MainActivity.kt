@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
         if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
-        else startHardwarePedometer()
+        else requestActivityPermission()
     }
 
     private val activityPermissionRequest = registerForActivityResult(
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun connectHealthConnect() {
-        startHardwarePedometer()
+        // Health Connect first; request ACTIVITY_RECOGNITION before using hardware sensor.
         val status = HealthConnectClient.getSdkStatus(this)
         if (status != HealthConnectClient.SDK_AVAILABLE) {
             requestActivityPermission()
