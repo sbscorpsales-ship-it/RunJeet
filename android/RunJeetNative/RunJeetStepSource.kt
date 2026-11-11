@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.provider.Settings
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
@@ -15,9 +16,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Native Android step source scaffold.
- * Device TYPE_STEP_COUNTER is cumulative since reboot; persist the baseline
- * and derive today's delta. Health Connect aggregate is preferred when allowed.
+ * Native Android step source.
+ * TYPE_STEP_COUNTER is cumulative since boot. A separate persisted baseline
+ * is maintained for each local calendar day and device boot.
  */
 class RunJeetStepSource(
     context: Context,
@@ -27,7 +28,6 @@ class RunJeetStepSource(
     private val manager = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val sensor = manager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
     private val prefs = app.getSharedPreferences("runjeet_steps", Context.MODE_PRIVATE)
-    private var bootBaseline = -1f
 
     fun start() {
         sensor?.let { manager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
@@ -37,15 +37,27 @@ class RunJeetStepSource(
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
-        val totalSinceBoot = event.values[0]
-        val bootId = android.provider.Settings.Global.getInt(app.contentResolver, "boot_count", 0).toLong()
+        val totalSinceBoot = event.values[0].toLong().coerceAtLeast(0L)
+        val bootId = Settings.Global.getInt(app.contentResolver, "boot_count", 0).toLong()
+        val today = LocalDate.now(ZoneId.systemDefault()).toString()
         val savedBoot = prefs.getLong("boot_marker", -1L)
-        if (savedBoot != bootId || bootBaseline < 0f) {
-            bootBaseline = totalSinceBoot
-            prefs.edit().putLong("boot_marker", bootId).putFloat("baseline", bootBaseline).apply()
+        val savedDay = prefs.getString("baseline_day", null)
+        val key = "baseline_${bootId}_${today}"
+
+        var baseline = if (savedBoot == bootId && savedDay == today) {
+            prefs.getLong(key, -1L)
+        } else -1L
+
+        if (baseline < 0L || baseline > totalSinceBoot) {
+            baseline = totalSinceBoot
+            prefs.edit()
+                .putLong("boot_marker", bootId)
+                .putString("baseline_day", today)
+                .putLong(key, baseline)
+                .apply()
         }
-        val todayDelta = (totalSinceBoot - bootBaseline).toLong().coerceAtLeast(0)
-        onDailySteps(todayDelta, "ANDROID_HARDWARE_PEDOMETER")
+
+        onDailySteps((totalSinceBoot - baseline).coerceAtLeast(0L), "ANDROID_HARDWARE_PEDOMETER")
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -55,9 +67,10 @@ class RunJeetStepSource(
     }
 }
 
+/** Use Health Connect's daily aggregate as the preferred source when permission is granted. */
 class RunJeetHealthConnect(private val client: HealthConnectClient) {
     suspend fun todaySteps(): Long {
-        val start = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
+        val start = LocalDate.now(ZoneId.systemDefault()).atStartOfDay(ZoneId.systemDefault()).toInstant()
         val end = Instant.now()
         val result = client.aggregate(
             AggregateRequest(
