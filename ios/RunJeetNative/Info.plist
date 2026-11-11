@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+<key>NSHealthShareUsageDescription</key><string>RunJeet reads your daily step totals from Apple Health to show accurate activity even when the app is closed.</string>
+<key>NSHealthUpdateUsageDescription</key><string>RunJeet may save workouts you choose to record.</string>
 <key>NSMotionUsageDescription</key><string>RunJeet uses motion activity to display your iPhone's pedometer step count.</string>
 </dict></plist>
