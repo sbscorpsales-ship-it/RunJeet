@@ -6,7 +6,7 @@ const blank=()=>({version:1,profile:null,stepsByDay:{},sessions:[],active:null})
 const steps=()=>state.stepsByDay[day()]||0;
 const toast=m=>{$("toast").textContent=m;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2600)};
 const dbOpen=()=>new Promise((ok,no)=>{let r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore("state");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
-function save(){saveQueue=saveQueue.then(()=>new Promise((ok,no)=>{state.lastUpdated=new Date().toISOString();let t=db.transaction("state","readwrite");t.objectStore("state").put(state,"main");t.oncomplete=()=>{$("saveStatus").textContent="SAVED ON THIS DEVICE";ok()};t.onerror=()=>{$("saveStatus").textContent="SAVE ISSUE";no(t.error)};}));return saveQueue}
+function save(){saveQueue=saveQueue.catch(()=>{}).then(()=>new Promise((ok,no)=>{state.lastUpdated=new Date().toISOString();let t=db.transaction("state","readwrite");t.objectStore("state").put(state,"main");t.oncomplete=()=>{$("saveStatus").textContent="SAVED ON THIS DEVICE";ok()};t.onerror=()=>{$("saveStatus").textContent="SAVE ISSUE";no(t.error)};}));return saveQueue}
 function distance(a,b){const r=6371000,x=Math.PI/180,d1=(b.lat-a.lat)*x,d2=(b.lon-a.lon)*x,q=Math.sin(d1/2)**2+Math.cos(a.lat*x)*Math.cos(b.lat*x)*Math.sin(d2/2)**2;return 2*r*Math.asin(Math.sqrt(Math.min(1,q)))}
 const dist=s=>(s?.points||[]).reduce((n,p,i,a)=>i?n+distance(a[i-1],p):0,0);
 const elapsed=s=>s?Math.max(0,Math.floor(((s.pausedAt||s.endedAt||Date.now())-s.startedAt-s.pausedMs)/1000)):0;
