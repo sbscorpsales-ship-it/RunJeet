@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun connectHealthConnect() {
+        startHardwarePedometer()
         val status = HealthConnectClient.getSdkStatus(this)
         if (status != HealthConnectClient.SDK_AVAILABLE) {
             requestActivityPermission()
