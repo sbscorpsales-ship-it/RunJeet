@@ -13,7 +13,50 @@ const elapsed=s=>s?Math.max(0,Math.floor(((s.pausedAt||s.endedAt||Date.now())-s.
 const time=n=>{n=Math.max(0,Math.floor(n||0));return String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0")};
 function render(){const n=steps(),s=state.active,d=dist(s),sec=elapsed(s);$("steps").textContent=n.toLocaleString();$("stepProgress").style.width=Math.min(100,n/GOAL*100)+"%";$("stepMessage").textContent=n>=GOAL?"Daily goal reached":(GOAL-n).toLocaleString()+" steps to your goal";$("distance").innerHTML=(d/1000).toFixed(2)+' <small>km</small>';$("activeTime").textContent=time(sec);$("pace").textContent=d>0?time(sec/(d/1000)):"—";$("gpsStatus").textContent=!s?"NOT TRACKING":s.pausedAt?"PAUSED":"TRACKING";$("gpsHeadline").textContent=!s?"Ready when you are":s.pausedAt?"Activity paused":"Recording your activity";$("gpsDetail").textContent=!s?"Start a session to record your route and distance.":s.points.length+" GPS points recorded";$("startBtn").disabled=!!s;$("pauseBtn").disabled=!s;$("finishBtn").disabled=!s;$("pauseBtn").textContent=s?.pausedAt?"RESUME":"PAUSE";$("appStatus").textContent=s?"ACTIVITY LIVE":"READY";$("sessionCount").textContent=state.sessions.length+" SAVED";$("history").innerHTML=state.sessions.length?state.sessions.slice(0,8).map(a=>'<div class="history-item"><div><strong>'+new Date(a.startedAt).toLocaleDateString()+'</strong><small>'+new Date(a.startedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+'</small></div><div class="history-right">'+((a.distanceM||0)/1000).toFixed(2)+' km<small>'+time(a.durationSec)+'</small></div></div>').join(""):'<div class="empty">Your completed activities will appear here.</div>'}
 async function addStep(){const k=day();state.stepsByDay[k]=(state.stepsByDay[k]||0)+1;render();try{await save()}catch{toast("Could not save step data")}}
-function detectStep(e){const now=Date.now();if(now-lastMotion<45)return;lastMotion=now;let a=e.acceleration;if(!a||a.x==null){const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;const alpha=.82;gravity.x=alpha*gravity.x+(1-alpha)*g.x;gravity.y=alpha*gravity.y+(1-alpha)*g.y;gravity.z=alpha*gravity.z+(1-alpha)*g.z;a={x:g.x-gravity.x,y:g.y-gravity.y,z:g.z-gravity.z}}const mag=Math.hypot(a.x||0,a.y||0,a.z||0);if(mag>1.15&&now-lastPeak>280){lastPeak=now;addStep()}}
+function detectStep(e){
+ const now=Date.now();
+ if(now-lastMotion<35)return;
+ lastMotion=now;
+ let a=e.acceleration;
+ if(!a||a.x==null){
+  const g=e.accelerationIncludingGravity;
+  if(!g||g.x==null)return;
+  const dt=gravity.last?Math.max(.01,Math.min(.2,(now-gravity.last)/1000)):.02;
+  const alpha=Math.exp(-dt/.45);
+  gravity.x=alpha*gravity.x+(1-alpha)*g.x;
+  gravity.y=alpha*gravity.y+(1-alpha)*g.y;
+  gravity.z=alpha*gravity.z+(1-alpha)*g.z;
+  gravity.last=now;
+  a={x:g.x-gravity.x,y:g.y-gravity.y,z:g.z-gravity.z};
+ }
+ const mag=Math.hypot(a.x||0,a.y||0,a.z||0);
+ detectStep.prev=detectStep.prev||0;
+ detectStep.peak=detectStep.peak||0;
+ if(mag>detectStep.peak)detectStep.peak=mag;
+ const falling=mag<detectStep.prev;
+ const peak=detectStep.peak;
+ if(falling&&peak>=2.0&&now-(detectStep.lastCandidate||0)>=300){
+  detectStep.lastCandidate=now;
+  detectStep.candidates=detectStep.candidates||[];
+  detectStep.candidates.push(now);
+  if(detectStep.candidates.length>8)detectStep.candidates.shift();
+  const c=detectStep.candidates,n=c.length;
+  if(n>=3){
+   const intervals=[c[n-1]-c[n-2],c[n-2]-c[n-3]];
+   const avg=(intervals[0]+intervals[1])/2;
+   const rhythmic=intervals.every(v=>v>=300&&v<=1200)&&Math.abs(intervals[0]-intervals[1])<=Math.max(180,avg*.30);
+   if(rhythmic){
+    const confirmed=c[n-1];
+    if(detectStep.lastCounted!==confirmed){
+     detectStep.lastCounted=confirmed;
+     addStep();
+    }
+   }
+  }
+  detectStep.peak=0;
+ }
+ detectStep.prev=mag;
+}
 async function enableMotion(){try{if(!("DeviceMotionEvent"in window)){toast("Motion sensor unavailable in this browser.");return}if(typeof DeviceMotionEvent.requestPermission==="function"&&await DeviceMotionEvent.requestPermission()!=="granted"){toast("Motion permission not granted.");return}if(motionHandler)window.removeEventListener("devicemotion",motionHandler);motionHandler=detectStep;window.addEventListener("devicemotion",motionHandler,{passive:true});$("motionStatus").textContent="Motion sensor active while app is open";$("stepSource").textContent="DEVICE MOTION";$("enableMotion").textContent="SENSOR ON";$("enableMotion").disabled=true;toast("Step detection enabled. Keep app open while walking.")}catch{toast("Could not enable motion sensor. Check browser permissions.")}}
 function startWatch(){if(!navigator.geolocation){toast("GPS unavailable in this browser.");return}watch=navigator.geolocation.watchPosition(async p=>{const c=p.coords,s=state.active;if(!s||s.pausedAt||c.accuracy>60)return;const q={lat:c.latitude,lon:c.longitude,accuracy:c.accuracy,ts:p.timestamp||Date.now()},prev=s.points.at(-1);if(!prev||(q.ts-prev.ts>1500&&distance(prev,q)>2)){s.points.push(q);s.gpsAccuracy=Math.round(c.accuracy);try{await save()}catch{toast("GPS point could not be saved")}render()}},e=>{const m=e.code===1?"Location permission denied. Allow it in browser settings.":e.code===2?"GPS signal unavailable. Move to an open area.":"GPS timed out. Keep trying.";$("gpsDetail").textContent=m;toast(m)},{enableHighAccuracy:true,maximumAge:1000,timeout:15000});if(!tick)tick=setInterval(render,1000)}
 function stopWatch(){if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null}if(tick){clearInterval(tick);tick=null}}
