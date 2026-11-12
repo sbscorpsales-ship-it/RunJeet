@@ -52,9 +52,14 @@ class MainActivity : ComponentActivity() {
     private val healthPermissionRequest = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
-        if (readHealthPermissions.all { it in granted }) {
-            readHealthConnectSteps()
+        // Health Connect permissions are independent: never block step import
+        // just because the user declined optional distance, calorie or workout access.
+        if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
+        if (HealthPermission.getReadPermission(DistanceRecord::class) in granted &&
+            HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted) {
             readHealthConnectActivityTotals()
+        }
+        if (HealthPermission.getReadPermission(ExerciseSessionRecord::class) in granted) {
             readHealthConnectWorkouts()
         }
         requestActivityPermission()
