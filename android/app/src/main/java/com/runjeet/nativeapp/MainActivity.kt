@@ -189,22 +189,38 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    private fun dispatchWorkoutExportStatus(success: Boolean, message: String) {
+        val payload = JSONObject().put("success", success).put("message", message)
+        RunJeetWebBridge.emit("runjeetNativeWorkoutExport", payload.toString())
+    }
+
     private fun saveWorkoutToHealthConnect(payload: String) {
-        val client = healthClient ?: return
+        val client = healthClient
+        if (client == null) {
+            dispatchWorkoutExportStatus(false, "Health Connect is unavailable. Workout remains saved in RunJeet on this device.")
+            return
+        }
         lifecycleScope.launch {
             try {
                 val granted = client.permissionController.getGrantedPermissions()
-                if (!granted.containsAll(writeWorkoutPermissions)) return@launch
+                if (HealthPermission.getWritePermission(ExerciseSessionRecord::class) !in granted) {
+                    dispatchWorkoutExportStatus(false, "Health Connect workout permission was not granted. Workout remains saved in RunJeet.")
+                    return@launch
+                }
                 val data = JSONObject(payload)
                 val start = Instant.ofEpochMilli(data.getLong("startTime"))
                 val end = Instant.ofEpochMilli(data.getLong("endTime"))
-                if (!end.isAfter(start)) return@launch
+                if (!end.isAfter(start)) {
+                    dispatchWorkoutExportStatus(false, "Workout time range is invalid; the local RunJeet record is retained.")
+                    return@launch
+                }
                 val activityName = data.optString("activityType", "Other")
                 val records = mutableListOf<androidx.health.connect.client.records.Record>(
                     RunJeetHealthRecords.session(activityName, start, end)
                 )
                 val calories = data.optDouble("activeCalories", Double.NaN)
-                if (calories.isFinite() && calories > 0.0) {
+                if (calories.isFinite() && calories > 0.0 &&
+                    HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class) in granted) {
                     val zone = ZoneId.systemDefault()
                     records.add(ActiveCaloriesBurnedRecord(
                         startTime = start,
@@ -216,8 +232,9 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 client.insertRecords(records)
-            } catch (_: Exception) {
-                // Local RunJeet history remains available if Health Connect is unavailable.
+                dispatchWorkoutExportStatus(true, "Workout exported to Health Connect.")
+            } catch (error: Exception) {
+                dispatchWorkoutExportStatus(false, "Health Connect export failed: ${error.message ?: "unknown error"}. Workout remains saved in RunJeet.")
             }
         }
     }
