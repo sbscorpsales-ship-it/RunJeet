@@ -1,9 +1,28 @@
-# RunJeet — fresh MVP
+# RunJeet
 
-Standalone app source, independent of GATIVX, WalkOn and Mission-75.
+RunJeet is a device-first fitness tracker with a web dashboard hosted on GitHub Pages and native Android/iOS shells.
 
-Includes motion-based step estimation while active, GPS session recording, start/pause/resume/finish, live distance/time/pace, local IndexedDB persistence, backup export/import and an offline app shell.
+## Current implemented capabilities
+- Native Android hardware step counting through `TYPE_STEP_COUNTER`, with a foreground health service, persistent daily total, midnight rollover and reboot-baseline recovery.
+- Android Health Connect reads for daily steps, activity totals and imported workouts when the user grants each permission.
+- Native iOS Core Motion pedometer and HealthKit daily totals/workout reads.
+- HealthKit observer queries with hourly background delivery requests for supported health data types.
+- Native GPS location services on Android and Core Location background-location configuration on iOS for active workouts.
+- GPS route points persisted locally by the native service and replayed to the dashboard when it is active again.
+- Local workout history, route display, IndexedDB persistence, and manual JSON backup/import.
+- Android unit tests for daily step counter rollover, reboot handling and counter regression.
 
-Limitations: no Apple Health/HealthKit connection; iOS may suspend browser motion/GPS in background; accelerometer steps are estimates; backup transfer is manual, not cloud sync; calories are intentionally not fabricated.
+## Important operating boundaries
+- Screen lock/background operation is supported by the native tracking implementations subject to OS scheduling, permissions, device settings and manufacturer battery controls. It must still be validated on physical devices.
+- Force-quitting the iOS app or force-stopping the Android app terminates its process; continuous tracking after those actions is not guaranteed.
+- The GitHub Pages browser/PWA version cannot provide the same reliable screen-off sensor and GPS behavior as the native apps.
+- GPS is intended for an explicitly started workout, not continuous all-day location collection.
+- Steps, distance and calories are shown only when sourced from the device/health platform or clearly identified as estimates. No browser accelerometer step estimates are used.
+- Profile, sessions and route history are stored on the device. There is no server authentication or automatic cross-device cloud sync yet.
 
-Deploy these files to GitHub Pages or another HTTPS static host. GPS and motion permissions require HTTPS or localhost.
+## Build and verification
+- Android CI runs unit tests, assembles a debug APK and uploads it as a workflow artifact.
+- iOS CI compiles simulator and unsigned device targets and packages an unsigned IPA artifact. Installation still requires signing.
+- Passing CI proves compilation/tests only. It does not prove background behavior on a physical phone.
+
+See the GitHub Actions workflows for current build results.
