@@ -16,6 +16,10 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.units.Energy
+import org.json.JSONObject
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -26,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var healthClient: HealthConnectClient? = null
     private var pendingGpsStart = false
+    private val writeWorkoutPermissions = setOf(HealthPermission.getWritePermission(ExerciseSessionRecord::class), HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class))
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface fun stopGPS() { runOnUiThread { stopLocationService() } }
         @JavascriptInterface fun clearRoute() { getSharedPreferences(RunJeetLocationService.PREFS, MODE_PRIVATE).edit().putString(RunJeetLocationService.KEY_ROUTE, "[]").apply() }
         @JavascriptInterface fun requestRoute() { runOnUiThread { dispatchStoredRoute() } }
+        @JavascriptInterface fun saveWorkout(payload: String) { saveWorkoutToHealthConnect(payload) }
     }
 
     private fun requestLocationAccessAndStart() {
@@ -135,9 +141,45 @@ class MainActivity : ComponentActivity() {
                 if (RunJeetStepSource.readStepsPermission in granted) {
                     readHealthConnectSteps()
                     requestActivityPermission()
-                } else healthPermissionRequest.launch(setOf(RunJeetStepSource.readStepsPermission))
+                } else healthPermissionRequest.launch(setOf(RunJeetStepSource.readStepsPermission) + writeWorkoutPermissions)
             } catch (_: Exception) {
                 requestActivityPermission()
+            }
+        }
+    }
+
+
+    private fun saveWorkoutToHealthConnect(payload: String) {
+        val client = healthClient ?: return
+        lifecycleScope.launch {
+            try {
+                val granted = client.permissionController.getGrantedPermissions()
+                if (!granted.containsAll(writeWorkoutPermissions)) return@launch
+                val data = JSONObject(payload)
+                val start = Instant.ofEpochMilli(data.getLong("startTime"))
+                val end = Instant.ofEpochMilli(data.getLong("endTime"))
+                if (!end.isAfter(start)) return@launch
+                val records = mutableListOf<androidx.health.connect.client.records.Record>(
+                    ExerciseSessionRecord(
+                        startTime = start,
+                        endTime = end,
+                        exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_WALKING,
+                        title = "RunJeet walk",
+                        metadata = androidx.health.connect.client.records.metadata.Metadata.manualEntry()
+                    )
+                )
+                val calories = data.optDouble("activeCalories", Double.NaN)
+                if (calories.isFinite() && calories > 0.0) {
+                    records.add(ActiveCaloriesBurnedRecord(
+                        startTime = start,
+                        endTime = end,
+                        energy = Energy.kilocalories(calories),
+                        metadata = androidx.health.connect.client.records.metadata.Metadata.manualEntry()
+                    ))
+                }
+                client.insertRecords(records)
+            } catch (_: Exception) {
+                // Local RunJeet history remains available if Health Connect is unavailable.
             }
         }
     }
