@@ -1,6 +1,7 @@
 package com.runjeet.nativeapp;
 
 import androidx.health.connect.client.records.ExerciseSessionRecord;
+import androidx.health.connect.client.records.ExerciseRoute;
 import androidx.health.connect.client.records.metadata.Metadata;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -38,7 +39,7 @@ public final class RunJeetHealthRecords {
             null,
             Collections.emptyList(),
             Collections.emptyList(),
-            null,
+            (ExerciseRoute) null,
             null
         );
     }
