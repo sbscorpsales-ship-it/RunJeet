@@ -258,13 +258,30 @@ class MainActivity : ComponentActivity() {
                         ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING -> "Strength Training"
                         else -> "Workout"
                     }
-                    records.put(JSONObject()
+                    // Attach distance and active energy recorded during this workout.
+                    // These are queried for the session window, not copied from the whole-day totals.
+                    val workoutTotals = client.aggregate(
+                        androidx.health.connect.client.request.AggregateRequest(
+                            metrics = setOf(
+                                DistanceRecord.DISTANCE_TOTAL,
+                                ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
+                            ),
+                            timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(
+                                workout.startTime, workout.endTime
+                            )
+                        )
+                    )
+                    val workoutDistance = workoutTotals[DistanceRecord.DISTANCE_TOTAL]?.inMeters
+                    val workoutCalories = workoutTotals[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
+                    val record = JSONObject()
                         .put("id", workout.metadata.id ?: "${workout.startTime.toEpochMilli()}-${workout.metadata.dataOrigin.packageName}")
                         .put("activityType", activity)
                         .put("startedAt", workout.startTime.toEpochMilli())
                         .put("durationSec", java.time.Duration.between(workout.startTime, workout.endTime).seconds.coerceAtLeast(0))
                         .put("sourceName", workout.metadata.dataOrigin.packageName)
-                    )
+                    if (workoutDistance != null) record.put("distanceM", workoutDistance)
+                    if (workoutCalories != null) record.put("activeCalories", workoutCalories)
+                    records.put(record)
                 }
                 RunJeetWebBridge.emit("runjeetNativeHealthWorkouts", JSONObject().put("records", records).toString())
             } catch (_: Exception) {
