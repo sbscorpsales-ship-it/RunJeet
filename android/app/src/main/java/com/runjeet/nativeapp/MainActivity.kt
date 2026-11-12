@@ -19,6 +19,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.units.Energy
 import org.json.JSONObject
 import androidx.lifecycle.lifecycleScope
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
         if (readHealthPermissions.all { it in granted }) {
             readHealthConnectSteps()
             readHealthConnectActivityTotals()
+            readHealthConnectWorkouts()
         }
         requestActivityPermission()
     }
@@ -155,6 +157,7 @@ class MainActivity : ComponentActivity() {
                 else {
                     readHealthConnectSteps()
                     readHealthConnectActivityTotals()
+                    readHealthConnectWorkouts()
                     requestActivityPermission()
                 }
             } catch (_: Exception) {
@@ -224,6 +227,47 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun readHealthConnectWorkouts() {
+        val client = healthClient ?: return
+        lifecycleScope.launch {
+            try {
+                val start = LocalDate.now(ZoneId.systemDefault()).minusDays(30)
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val response = client.readRecords(
+                    ReadRecordsRequest(
+                        recordType = ExerciseSessionRecord::class,
+                        timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.after(start),
+                        pageSize = 30
+                    )
+                )
+                val records = JSONArray()
+                response.records.sortedByDescending { it.startTime }.forEach { workout ->
+                    val activity = when (workout.exerciseType) {
+                        ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "Walking"
+                        ExerciseSessionRecord.EXERCISE_TYPE_RUNNING -> "Running"
+                        ExerciseSessionRecord.EXERCISE_TYPE_BIKING -> "Cycling"
+                        ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> "Hiking"
+                        ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL,
+                        ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER -> "Swimming"
+                        ExerciseSessionRecord.EXERCISE_TYPE_YOGA -> "Yoga"
+                        ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING -> "Strength Training"
+                        else -> "Workout"
+                    }
+                    records.put(JSONObject()
+                        .put("id", workout.metadata.id ?: "${workout.startTime.toEpochMilli()}-${workout.metadata.dataOrigin.packageName}")
+                        .put("activityType", activity)
+                        .put("startedAt", workout.startTime.toEpochMilli())
+                        .put("durationSec", java.time.Duration.between(workout.startTime, workout.endTime).seconds.coerceAtLeast(0))
+                        .put("sourceName", workout.metadata.dataOrigin.packageName)
+                    )
+                }
+                RunJeetWebBridge.emit("runjeetNativeHealthWorkouts", JSONObject().put("records", records).toString())
+            } catch (_: Exception) {
+                // Workout history remains optional; do not block step or daily-total imports.
+            }
+        }
+    }
+
     private fun readHealthConnectActivityTotals() {
         val client = healthClient ?: return
         lifecycleScope.launch {
@@ -280,6 +324,7 @@ class MainActivity : ComponentActivity() {
         if (::webView.isInitialized) {
             readHealthConnectSteps()
             readHealthConnectActivityTotals()
+            readHealthConnectWorkouts()
             dispatchCachedHardwareSteps()
             // Replay the locally buffered GPS route after returning from background.
             // WebView events may have been missed while Android suspended the UI.
