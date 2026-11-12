@@ -396,7 +396,12 @@ struct RunJeetWebView: UIViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 // HealthKit is the preferred consolidated source; Core Motion is fallback.
-                if self.latestSource.contains("HEALTH") && !source.contains("HEALTH") { return }
+                // Prefer a positive HealthKit aggregate; if HealthKit returns zero
+                // (for example, read access is unavailable), use Core Motion instead.
+                if self.latestSource.contains("HEALTH") && !source.contains("HEALTH"),
+                   (self.latestSteps ?? 0) > 0 { return }
+                if source.contains("HEALTH"), count == 0,
+                   self.latestSteps != nil, !(self.latestSource.contains("HEALTH")) { return }
                 self.latestSteps = max(0, count)
                 self.latestSource = source
                 self.sendPedometerStatus("SYNCED", message: "Daily steps synchronized from \(source.lowercased()).")
