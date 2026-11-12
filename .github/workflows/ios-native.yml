@@ -23,7 +23,7 @@ jobs:
       - name: Compile unsigned iPhone device app (free-account sideload build)
         working-directory: ios
         run: |
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= build
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned iPhone IPA for local signing
         run: |
           mkdir -p ios/ipa/Payload
