@@ -124,6 +124,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var latestSource = "IPHONE PEDOMETER"
         private var latestHealthDistance: Double?
         private var latestHealthCalories: Double?
+        private var latestHealthWorkoutsJSON: String?
         private let routeStorageKey = "runjeet.native.route.v1"
         private var routePoints: [[String: Double]] = UserDefaults.standard.array(forKey: "runjeet.native.route.v1") as? [[String: Double]] ?? []
 
@@ -138,6 +139,8 @@ struct RunJeetWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
             flushLatestSteps()
+            flushHealthTotals()
+            flushHealthWorkouts()
             flushStoredRoute()
             queryHealthSteps()
             queryHealthActivityTotals()
@@ -252,12 +255,19 @@ struct RunJeetWebView: UIViewRepresentable {
                 guard let data = try? JSONSerialization.data(withJSONObject: records, options: [.fragmentsAllowed]),
                       let json = String(data: data, encoding: .utf8) else { return }
                 DispatchQueue.main.async {
-                    guard self.pageLoaded else { return }
-                    let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealthWorkouts',{detail:{records:\(json)}}));"
-                    self.webView?.evaluateJavaScript(script, completionHandler: nil)
+                    // Cache the latest HealthKit result even if the web page has not
+                    // finished loading. The page can then receive it on navigation.
+                    self.latestHealthWorkoutsJSON = json
+                    self.flushHealthWorkouts()
                 }
             }
             healthStore.execute(query)
+        }
+
+        private func flushHealthWorkouts() {
+            guard pageLoaded, let records = latestHealthWorkoutsJSON else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealthWorkouts',{detail:{records:\(records)}}));"
+            webView?.evaluateJavaScript(script, completionHandler: nil)
         }
 
         private func flushHealthTotals() {
