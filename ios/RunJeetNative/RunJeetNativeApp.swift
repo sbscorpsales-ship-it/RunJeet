@@ -292,17 +292,45 @@ struct RunJeetWebView: UIViewRepresentable {
             }
         }
 
+        private func sendPedometerStatus(_ status: String, message: String) {
+            let safeMessage = message.replacingOccurrences(of: "'", with: "")
+            let script = "window.dispatchEvent(new CustomEvent('runjeetPedometerStatus',{detail:{status:'\(status)',message:'\(safeMessage)'}}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
+        }
+
         private func startPedometer() {
-            guard CMPedometer.isStepCountingAvailable(), !pedometerActive else { return }
-            pedometerActive = true
-            let start = Calendar.current.startOfDay(for: Date())
-            pedometer.queryPedometerData(from: start, to: Date()) { [weak self] data, _ in
-                guard let count = data?.numberOfSteps.intValue else { return }
-                self?.sendSteps(count, source: "IPHONE PEDOMETER")
+            guard CMPedometer.isStepCountingAvailable() else {
+                sendPedometerStatus("UNAVAILABLE", "This iPhone does not currently provide pedometer step data.")
+                return
             }
-            pedometer.startUpdates(from: start) { [weak self] data, _ in
+            guard !pedometerActive else { return }
+            switch CMPedometer.authorizationStatus() {
+            case .denied, .restricted:
+                sendPedometerStatus("PERMISSION_REQUIRED", "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
+                return
+            default:
+                break
+            }
+            pedometerActive = true
+            sendPedometerStatus("CONNECTING", "Activating iPhone pedometer…")
+            let start = Calendar.current.startOfDay(for: Date())
+            pedometer.queryPedometerData(from: start, to: Date()) { [weak self] data, error in
+                guard let self else { return }
+                if let error {
+                    self.sendPedometerStatus("ERROR", "Pedometer read failed: \(error.localizedDescription)")
+                    return
+                }
                 guard let count = data?.numberOfSteps.intValue else { return }
-                self?.sendSteps(count, source: "IPHONE PEDOMETER")
+                self.sendSteps(count, source: "IPHONE PEDOMETER")
+            }
+            pedometer.startUpdates(from: start) { [weak self] data, error in
+                guard let self else { return }
+                if let error {
+                    self.sendPedometerStatus("ERROR", "Pedometer update failed: \(error.localizedDescription)")
+                    return
+                }
+                guard let count = data?.numberOfSteps.intValue else { return }
+                self.sendSteps(count, source: "IPHONE PEDOMETER")
             }
         }
 
