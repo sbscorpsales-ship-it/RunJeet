@@ -398,12 +398,27 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
 
+        private func sendWorkoutExportStatus(success: Bool, message: String) {
+            let payload: [String: Any] = ["success": success, "message": message]
+            guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed, .sortedKeys]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeWorkoutExport',{detail:\\(json)}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
+        }
+
         private func saveWorkout(_ payload: String) {
             guard let data = payload.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let startMs = object["startTime"] as? Double,
                   let endMs = object["endTime"] as? Double,
-                  endMs > startMs else { return }
+                  endMs > startMs else {
+                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your RunJeet activity remains saved locally.")
+                return
+            }
+            guard HKHealthStore.isHealthDataAvailable() else {
+                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your RunJeet activity remains saved locally.")
+                return
+            }
             let start = Date(timeIntervalSince1970: startMs / 1000)
             let end = Date(timeIntervalSince1970: endMs / 1000)
             let distance = (object["distanceM"] as? Double) ?? 0
@@ -420,7 +435,14 @@ struct RunJeetWebView: UIViewRepresentable {
             let workout = HKWorkout(activityType: activityType, start: start, end: end,
                                     workoutEvents: nil, totalEnergyBurned: energyQuantity,
                                     totalDistance: distanceQuantity, metadata: [HKMetadataKeyWasUserEntered: true])
-            healthStore.save(workout) { _, _ in }
+            healthStore.save(workout) { [weak self] success, error in
+                guard let self else { return }
+                if success {
+                    self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
+                } else {
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \\(error?.localizedDescription ?? "permission not granted"). Your RunJeet activity remains saved locally.")
+                }
+            }
         }
 
         private func sendSteps(_ count: Int, source: String) {
