@@ -32,5 +32,12 @@ Step collection must not depend on RunJeet being open, a RunJeet account/login, 
 5. Verify no duplicate counting when multiple health sources are enabled.
 6. Test iPhone and multiple Android device families, including battery saver.
 
-## Build status
-The current GitHub Pages app is a web app and cannot meet this requirement by itself. The iOS Core Motion source scaffold exists but is not yet a complete, signed, installed native application; HealthKit integration and Android native/Health Connect implementation remain outstanding. Real device builds and tests are mandatory before claiming completion.
+## Build status — audited 12 November 2026
+
+- The iOS native source now contains a WKWebView bridge, Core Motion daily pedometer query/updates, HealthKit authorization and daily aggregate queries, workout-history reads, workout writes, and Core Location route recording with local route persistence/recovery.
+- The RunJeet web layer consumes native step, health-total, workout-history, GPS-point, and pedometer-status events. Browser-only motion estimates are disabled to avoid presenting estimates as system steps.
+- GitHub Actions has previously produced successful iOS simulator/device compilation and an unsigned IPA packaging workflow. A successful compile or unsigned IPA is not the same as a signed, installed, working iPhone app.
+- Android source/build work exists, but real Health Connect and hardware step-counter operation must be checked on physical devices; the device-level acceptance tests below have not been evidenced as passed.
+- Remaining release gates: install the native builds on physical iPhone and Android devices; grant and deny permissions; force-close the app and walk offline; lock the phone and walk; reopen and compare daily totals with Apple Health/Health Connect; verify no source double-counting; test background GPS recovery; verify workout export and route/history persistence.
+- Current RunJeet profile and activity persistence in the web app uses on-device IndexedDB. The profile state is local to that browser/device and is not server authentication or cross-device cloud sync.
+- Therefore, native source implementation and CI build evidence are present, but end-to-end device verification and production-ready cross-device account/cloud sync are not complete. Do not claim 100% completion until the physical-device release gates pass.
