@@ -300,24 +300,24 @@ struct RunJeetWebView: UIViewRepresentable {
 
         private func startPedometer() {
             guard CMPedometer.isStepCountingAvailable() else {
-                sendPedometerStatus("UNAVAILABLE", "This iPhone does not currently provide pedometer step data.")
+                sendPedometerStatus("UNAVAILABLE", message: "This iPhone does not currently provide pedometer step data.")
                 return
             }
             guard !pedometerActive else { return }
             switch CMPedometer.authorizationStatus() {
             case .denied, .restricted:
-                sendPedometerStatus("PERMISSION_REQUIRED", "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
+                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
                 return
             default:
                 break
             }
             pedometerActive = true
-            sendPedometerStatus("CONNECTING", "Activating iPhone pedometer…")
+            sendPedometerStatus("CONNECTING", message: "Activating iPhone pedometer…")
             let start = Calendar.current.startOfDay(for: Date())
             pedometer.queryPedometerData(from: start, to: Date()) { [weak self] data, error in
                 guard let self else { return }
                 if let error {
-                    self.sendPedometerStatus("ERROR", "Pedometer read failed: \(error.localizedDescription)")
+                    self.sendPedometerStatus("ERROR", message: "Pedometer read failed: \(error.localizedDescription)")
                     return
                 }
                 guard let count = data?.numberOfSteps.intValue else { return }
@@ -326,7 +326,7 @@ struct RunJeetWebView: UIViewRepresentable {
             pedometer.startUpdates(from: start) { [weak self] data, error in
                 guard let self else { return }
                 if let error {
-                    self.sendPedometerStatus("ERROR", "Pedometer update failed: \(error.localizedDescription)")
+                    self.sendPedometerStatus("ERROR", message: "Pedometer update failed: \(error.localizedDescription)")
                     return
                 }
                 guard let count = data?.numberOfSteps.intValue else { return }
