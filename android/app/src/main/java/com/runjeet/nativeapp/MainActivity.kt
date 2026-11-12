@@ -1,6 +1,7 @@
 package com.runjeet.nativeapp
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -21,7 +22,6 @@ import java.time.ZoneId
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
-    private var stepSource: RunJeetStepSource? = null
     private var healthClient: HealthConnectClient? = null
 
     private val healthPermissionRequest = registerForActivityResult(
@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    latestSteps?.let { dispatchSteps(it.first, it.second) }
+                    latestSteps?.let { dispatchSteps(it.first, it.second) } ?: dispatchCachedHardwareSteps()
                 }
             }
         }
@@ -116,20 +116,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startHardwarePedometer() {
-        if (stepSource != null) return
-        stepSource = RunJeetStepSource(this) { count, source ->
-            // Health Connect remains the preferred consolidated daily total.
+        val serviceIntent = Intent(this, RunJeetPedometerService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        dispatchCachedHardwareSteps()
+    }
+
+    private fun dispatchCachedHardwareSteps() {
+        val prefs = getSharedPreferences(RunJeetPedometerService.STEPS_PREFS, MODE_PRIVATE)
+        val savedDate = prefs.getString("latest_step_date", null)
+        if (savedDate == LocalDate.now(ZoneId.systemDefault()).toString()) {
+            val count = prefs.getLong("latest_daily_steps", 0L)
+            val source = prefs.getString("latest_step_source", "ANDROID_HARDWARE_PEDOMETER") ?: "ANDROID_HARDWARE_PEDOMETER"
             if (latestSteps?.second?.contains("HEALTH CONNECT") != true) dispatchSteps(count, source)
-        }.also { it.start() }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        if (::webView.isInitialized) readHealthConnectSteps()
+        if (::webView.isInitialized) {
+            readHealthConnectSteps()
+            dispatchCachedHardwareSteps()
+        }
     }
 
     override fun onDestroy() {
-        stepSource?.stop()
         webView.destroy()
         super.onDestroy()
     }
