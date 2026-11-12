@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.webkit.JavascriptInterface
+import org.json.JSONArray
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -23,6 +25,16 @@ import java.time.ZoneId
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var healthClient: HealthConnectClient? = null
+    private var pendingGpsStart = false
+
+    private val locationPermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted && pendingGpsStart) startLocationService()
+        else if (pendingGpsStart) dispatchGpsError("Location permission is required to record a route.")
+        pendingGpsStart = false
+    }
 
     private val healthPermissionRequest = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -43,16 +55,56 @@ class MainActivity : ComponentActivity() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            addJavascriptInterface(AndroidCommands(), "RunJeetAndroid")
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     latestSteps?.let { dispatchSteps(it.first, it.second) } ?: dispatchCachedHardwareSteps()
+                    dispatchStoredRoute()
                 }
             }
         }
+        RunJeetWebBridge.attach(webView)
         setContentView(webView)
         webView.loadUrl("https://sbscorpsales-ship-it.github.io/RunJeet/")
         connectHealthConnect()
+    }
+
+    private inner class AndroidCommands {
+        @JavascriptInterface fun startGPS() { runOnUiThread { requestLocationAccessAndStart() } }
+        @JavascriptInterface fun stopGPS() { runOnUiThread { stopLocationService() } }
+        @JavascriptInterface fun clearRoute() { getSharedPreferences(RunJeetLocationService.PREFS, MODE_PRIVATE).edit().putString(RunJeetLocationService.KEY_ROUTE, "[]").apply() }
+        @JavascriptInterface fun requestRoute() { runOnUiThread { dispatchStoredRoute() } }
+    }
+
+    private fun requestLocationAccessAndStart() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) { startLocationService(); return }
+        pendingGpsStart = true
+        locationPermissionRequest.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+
+    private fun startLocationService() {
+        val intent = Intent(this, RunJeetLocationService::class.java).setAction(RunJeetLocationService.ACTION_START)
+        try { ContextCompat.startForegroundService(this, intent) }
+        catch (_: SecurityException) { dispatchGpsError("Android blocked GPS service. Open RunJeet and allow precise location.") }
+    }
+
+    private fun stopLocationService() {
+        val intent = Intent(this, RunJeetLocationService::class.java).setAction(RunJeetLocationService.ACTION_STOP)
+        startService(intent)
+    }
+
+    private fun dispatchStoredRoute() {
+        val raw = getSharedPreferences(RunJeetLocationService.PREFS, MODE_PRIVATE).getString(RunJeetLocationService.KEY_ROUTE, "[]") ?: "[]"
+        val points = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+        RunJeetWebBridge.emit("runjeetNativeRoute", "{points:$points}")
+    }
+
+    private fun dispatchGpsError(message: String) {
+        val safe = org.json.JSONObject.quote(message)
+        RunJeetWebBridge.emit("runjeetNativeGpsError", "{message:$safe}")
     }
 
     private var latestSteps: Pair<Long, String>? = null
