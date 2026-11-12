@@ -78,10 +78,8 @@ function importAppleHealthShortcut(){
  const raw=params.get('gativx_steps'),date=params.get('gativx_date'),count=Number(raw);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')||!Number.isSafeInteger(count)||count<0||count>200000){toast('Apple Health shortcut link is invalid. No step data was imported.');return false;}
  state.nativeStepsByDay=state.nativeStepsByDay||{};
- const previous=state.nativeStepsByDay[date];
- const merged=Math.max(Number.isSafeInteger(previous?.count)?previous.count:0,count);
- state.nativeStepsByDay[date]={count:merged,source:'APPLE HEALTH SHORTCUT',updatedAt:new Date().toISOString()};
- if(date===day()){nativeDailySteps=merged;nativeDailyStepsDay=date;nativeStepSource='APPLE HEALTH SHORTCUT';}
+ state.nativeStepsByDay[date]={count,source:'APPLE HEALTH SHORTCUT',updatedAt:new Date().toISOString()};
+ if(date===day()){nativeDailySteps=count;nativeDailyStepsDay=date;nativeStepSource='APPLE HEALTH SHORTCUT';}
  params.delete('gativx_steps');params.delete('gativx_date');
  const query=params.toString();history.replaceState({},document.title,location.pathname+(query?'?'+query:'')+location.hash);
  toast('Apple Health steps imported: '+merged.toLocaleString()+' for '+date);return true;
