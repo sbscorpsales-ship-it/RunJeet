@@ -169,9 +169,12 @@ class MainActivity : ComponentActivity() {
                 )
                 val calories = data.optDouble("activeCalories", Double.NaN)
                 if (calories.isFinite() && calories > 0.0) {
+                    val zone = ZoneId.systemDefault()
                     records.add(ActiveCaloriesBurnedRecord(
                         startTime = start,
+                        startZoneOffset = zone.rules.getOffset(start),
                         endTime = end,
+                        endZoneOffset = zone.rules.getOffset(end),
                         energy = Energy.kilocalories(calories),
                         metadata = androidx.health.connect.client.records.metadata.Metadata.manualEntry()
                     ))
@@ -238,6 +241,9 @@ class MainActivity : ComponentActivity() {
         if (::webView.isInitialized) {
             readHealthConnectSteps()
             dispatchCachedHardwareSteps()
+            // Replay the locally buffered GPS route after returning from background.
+            // WebView events may have been missed while Android suspended the UI.
+            dispatchStoredRoute()
         }
     }
 
