@@ -57,19 +57,43 @@ class RunJeetLocationService : Service(), LocationListener {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         } else startForeground(NOTIFICATION_ID, notification)
 
+        requestAvailableProviders()
+        return START_STICKY
+    }
+
+    // Keep the foreground service alive through temporary provider outages.
+    // GPS hardware does not require internet; network location is only a fallback.
+    private fun requestAvailableProviders() {
+        var requested = false
         try {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 3f, this, Looper.getMainLooper())
-            } else {
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000L, 5f, this, Looper.getMainLooper())
+                requested = true
             }
         } catch (_: SecurityException) {
-            stopSelf()
-        } catch (_: IllegalArgumentException) {
-            stopSelf()
+            RunJeetWebBridge.emit("runjeetNativeGpsStatus", JSONObject().put("message", "Location permission is unavailable. Your activity and saved route are retained.").toString())
+            return
+        } catch (_: IllegalArgumentException) {}
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000L, 5f, this, Looper.getMainLooper())
+                requested = true
+            }
+        } catch (_: SecurityException) {
+            RunJeetWebBridge.emit("runjeetNativeGpsStatus", JSONObject().put("message", "Location permission is unavailable. Your activity and saved route are retained.").toString())
+            return
+        } catch (_: IllegalArgumentException) {}
+        val message = if (requested) {
+            "GPS service is active. Route points are saved on this device; internet is not required for GPS recording."
+        } else {
+            "GPS signal or location provider is temporarily unavailable. RunJeet is keeping your activity open and will retry when location becomes available."
         }
-        return START_STICKY
+        RunJeetWebBridge.emit("runjeetNativeGpsStatus", JSONObject().put("message", message).toString())
     }
+
+    override fun onProviderEnabled(provider: String) { requestAvailableProviders() }
+
+    override fun onProviderDisabled(provider: String) { requestAvailableProviders() }
 
     override fun onLocationChanged(location: Location) {
         if (!location.hasAccuracy() || location.accuracy > 60f) return
@@ -104,9 +128,14 @@ class RunJeetLocationService : Service(), LocationListener {
 
     override fun onDestroy() { stopTracking(); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
-    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-    override fun onProviderEnabled(provider: String) {}
-    override fun onProviderDisabled(provider: String) {}
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+        if (status == android.location.LocationProvider.OUT_OF_SERVICE ||
+            status == android.location.LocationProvider.TEMPORARILY_UNAVAILABLE) {
+            RunJeetWebBridge.emit("runjeetNativeGpsStatus", JSONObject().put("message", "GPS signal temporarily unavailable. Your activity and saved route are safe; waiting for a new location fix.").toString())
+        } else if (status == android.location.LocationProvider.AVAILABLE) {
+            requestAvailableProviders()
+        }
+    }
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
