@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import WebKit
 import CoreMotion
+import CoreLocation
 import HealthKit
 
 @main
@@ -15,6 +16,7 @@ struct RunJeetWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let controller = WKUserContentController()
         let config = WKWebViewConfiguration()
+        controller.add(context.coordinator, name: "runjeet")
         config.userContentController = controller
         let web = WKWebView(frame: .zero, configuration: config)
         web.scrollView.contentInsetAdjustmentBehavior = .never
@@ -34,10 +36,44 @@ struct RunJeetWebView: UIViewRepresentable {
         uiView.navigationDelegate = nil
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
         weak var webView: WKWebView?
+
+        override init() {
+            super.init()
+            locationManager.delegate = self
+            locationManager.activityType = .fitness
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            locationManager.distanceFilter = 3
+            locationManager.pausesLocationUpdatesAutomatically = false
+            locationManager.allowsBackgroundLocationUpdates = true
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let command = message.body as? String else { return }
+            if command == "startGPS" {
+                DispatchQueue.main.async {
+                    self.locationManager.requestAlwaysAuthorization()
+                    if CLLocationManager.locationServicesEnabled() {
+                        self.locationManager.startUpdatingLocation()
+                        self.locationActive = true
+                    }
+                }
+            } else if command == "stopGPS" {
+                locationManager.stopUpdatingLocation()
+                locationActive = false
+            }
+        }
+
+        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+            guard let location = locations.last, location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 60 else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeLocation',{detail:{lat:\(location.coordinate.latitude),lon:\(location.coordinate.longitude),accuracy:\(location.horizontalAccuracy),ts:\(location.timestamp.timeIntervalSince1970 * 1000)}}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
+        }
         private let pedometer = CMPedometer()
         private let healthStore = HKHealthStore()
+        private let locationManager = CLLocationManager()
+        private var locationActive = false
         private var pedometerActive = false
         private var observer: HKObserverQuery?
         private var pageLoaded = false
@@ -103,6 +139,8 @@ struct RunJeetWebView: UIViewRepresentable {
         func stop() {
             pedometer.stopUpdates()
             pedometerActive = false
+            locationManager.stopUpdatingLocation()
+            locationActive = false
             if let observer { healthStore.stop(observer) }
         }
 
