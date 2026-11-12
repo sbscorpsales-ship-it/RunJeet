@@ -402,7 +402,7 @@ struct RunJeetWebView: UIViewRepresentable {
             let payload: [String: Any] = ["success": success, "message": message]
             guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed, .sortedKeys]),
                   let json = String(data: data, encoding: .utf8) else { return }
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeWorkoutExport',{detail:\\(json)}));"
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeWorkoutExport',{detail:\(json)}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
@@ -440,7 +440,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 if success {
                     self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
                 } else {
-                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \\(error?.localizedDescription ?? "permission not granted"). Your RunJeet activity remains saved locally.")
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(error?.localizedDescription ?? "permission not granted"). Your RunJeet activity remains saved locally.")
                 }
             }
         }
