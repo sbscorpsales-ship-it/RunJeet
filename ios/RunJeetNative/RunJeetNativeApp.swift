@@ -124,6 +124,7 @@ struct RunJeetWebView: UIViewRepresentable {
             flushStoredRoute()
             queryHealthSteps()
             queryHealthActivityTotals()
+            queryHealthWorkouts()
         }
 
         func requestHealthAccessAndStart() {
@@ -136,11 +137,12 @@ struct RunJeetWebView: UIViewRepresentable {
             let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
             let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
             let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling)!
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [steps, energy, walkRunDistance, cycleDistance]) { [weak self] _, _ in
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance]) { [weak self] _, _ in
                 guard let self else { return }
-                self.installHealthObservers(for: [steps, energy, walkRunDistance, cycleDistance])
+                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
+                self.queryHealthWorkouts()
                 self.startPedometer()
             }
         }
@@ -196,6 +198,44 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.latestHealthCalories = caloriesTotal
                 self.flushHealthTotals()
             }
+        }
+
+        private func queryHealthWorkouts() {
+            let workoutType = HKObjectType.workoutType()
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: workoutType, predicate: nil, limit: 30, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+                guard let self else { return }
+                let records: [[String: Any]] = (samples as? [HKWorkout] ?? []).map { workout in
+                    let activity: String
+                    switch workout.workoutActivityType {
+                    case .walking: activity = "Walking"
+                    case .running: activity = "Running"
+                    case .cycling: activity = "Cycling"
+                    case .hiking: activity = "Hiking"
+                    case .swimming: activity = "Swimming"
+                    case .yoga: activity = "Yoga"
+                    case .functionalStrengthTraining, .traditionalStrengthTraining: activity = "Strength Training"
+                    default: activity = "Workout"
+                    }
+                    return [
+                        "id": workout.uuid.uuidString,
+                        "activityType": activity,
+                        "startedAt": workout.startDate.timeIntervalSince1970 * 1000,
+                        "durationSec": max(0, workout.duration),
+                        "distanceM": workout.totalDistance?.doubleValue(for: .meter()) as Any? ?? NSNull(),
+                        "activeCalories": workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) as Any? ?? NSNull(),
+                        "sourceName": workout.sourceRevision.source.name
+                    ]
+                }
+                guard let data = try? JSONSerialization.data(withJSONObject: records, options: [.fragmentsAllowed]),
+                      let json = String(data: data, encoding: .utf8) else { return }
+                DispatchQueue.main.async {
+                    guard self.pageLoaded else { return }
+                    let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealthWorkouts',{detail:{records:\(json)}}));"
+                    self.webView?.evaluateJavaScript(script, completionHandler: nil)
+                }
+            }
+            healthStore.execute(query)
         }
 
         private func flushHealthTotals() {
