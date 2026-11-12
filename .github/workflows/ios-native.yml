@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
@@ -19,4 +19,9 @@ jobs:
       - name: Compile for iOS simulator without signing
         working-directory: ios
         run: |
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Upload iOS simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: runjeet-ios-simulator-build
+          path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app
