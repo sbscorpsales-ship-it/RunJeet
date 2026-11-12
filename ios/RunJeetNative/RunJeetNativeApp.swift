@@ -273,7 +273,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
                     self?.queryHealthSteps()
                     self?.queryHealthActivityTotals()
-                    if type.identifier == HKWorkoutTypeIdentifier { self?.queryHealthWorkouts() }
+                    self?.queryHealthWorkouts()
                     completion()
                 }
                 observers.append(query)
