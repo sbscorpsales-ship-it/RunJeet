@@ -101,7 +101,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var locationActive = false
         private var wantsLocationUpdates = false
         private var pedometerActive = false
-        private var observer: HKObserverQuery?
+        private var observers: [HKObserverQuery] = []
         private var pageLoaded = false
         private var latestSteps: Int?
         private var latestSource = "IPHONE PEDOMETER"
@@ -138,7 +138,7 @@ struct RunJeetWebView: UIViewRepresentable {
             let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling)!
             healthStore.requestAuthorization(toShare: [workout, energy], read: [steps, energy, walkRunDistance, cycleDistance]) { [weak self] _, _ in
                 guard let self else { return }
-                self.installHealthObserver(for: steps)
+                self.installHealthObservers(for: [steps, energy, walkRunDistance, cycleDistance])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.startPedometer()
@@ -206,15 +206,17 @@ struct RunJeetWebView: UIViewRepresentable {
             webView?.evaluateJavaScript(script, completionHandler: nil)
         }
 
-        private func installHealthObserver(for type: HKSampleType) {
-            let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
-                self?.queryHealthSteps()
-                self?.queryHealthActivityTotals()
-                completion()
+        private func installHealthObservers(for types: [HKSampleType]) {
+            for type in types {
+                let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
+                    self?.queryHealthSteps()
+                    self?.queryHealthActivityTotals()
+                    completion()
+                }
+                observers.append(query)
+                healthStore.execute(query)
+                healthStore.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
             }
-            observer = query
-            healthStore.execute(query)
-            healthStore.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
         }
 
         private func startPedometer() {
@@ -237,7 +239,8 @@ struct RunJeetWebView: UIViewRepresentable {
             wantsLocationUpdates = false
             locationManager.stopUpdatingLocation()
             locationActive = false
-            if let observer { healthStore.stop(observer) }
+            observers.forEach { healthStore.stop($0) }
+            observers.removeAll()
         }
 
 
