@@ -95,8 +95,9 @@ window.addEventListener("runjeetPedometerStatus",e=>{const d=e.detail||{};$("ste
 window.addEventListener("runjeetNativeSteps",e=>{
  const n=Number(e.detail?.steps),source=String(e.detail?.source||"IPHONE PEDOMETER").toUpperCase();
  if(!Number.isSafeInteger(n)||n<0)return;
- const priority=s=>s.includes("HEALTH")?2:1;
- if(nativeDailySteps!==null&&priority(source)<priority(nativeStepSource||""))return;
+ const incomingHealth=source.includes("HEALTH"), currentHealth=(nativeStepSource||"").includes("HEALTH");
+ if(nativeDailySteps!==null&&currentHealth&&!incomingHealth&&nativeDailySteps>0)return;
+ if(nativeDailySteps!==null&&incomingHealth&&n===0&&!currentHealth)return;
  nativeDailySteps=n;nativeStepSource=source;if(state&&db){state.nativeStepsByDay=state.nativeStepsByDay||{};state.nativeStepsByDay[day()]={count:n,source,updatedAt:new Date().toISOString()};save().catch(()=>toast("Step total could not be saved"));render();}
  $("stepMessage").textContent="Daily steps from "+source.toLowerCase();
 });
