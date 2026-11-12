@@ -177,7 +177,7 @@ struct RunJeetWebView: UIViewRepresentable {
             }
         }
 
-        private func queryHealthSteps() {
+        private func queryHealthSteps(completion: (() -> Void)? = nil) {
             guard let type = HKObjectType.quantityType(forIdentifier: .stepCount) else { return }
             let start = Calendar.current.startOfDay(for: Date())
             let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
@@ -185,11 +185,12 @@ struct RunJeetWebView: UIViewRepresentable {
                                           options: .cumulativeSum) { [weak self] _, result, _ in
                 let total = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
                 self?.sendSteps(Int(total), source: "APPLE HEALTH")
+                completion?()
             }
             healthStore.execute(query)
         }
 
-        private func queryHealthActivityTotals() {
+        private func queryHealthActivityTotals(completion: (() -> Void)? = nil) {
             let start = Calendar.current.startOfDay(for: Date())
             let end = Date()
             let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
@@ -227,10 +228,11 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.latestHealthDistance = distanceTotal
                 self.latestHealthCalories = caloriesTotal
                 self.flushHealthTotals()
+                completion?()
             }
         }
 
-        private func queryHealthWorkouts() {
+        private func queryHealthWorkouts(completion: (() -> Void)? = nil) {
             let workoutType = HKObjectType.workoutType()
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             let query = HKSampleQuery(sampleType: workoutType, predicate: nil, limit: 30, sortDescriptors: [sort]) { [weak self] _, samples, _ in
@@ -269,6 +271,7 @@ struct RunJeetWebView: UIViewRepresentable {
                     // finished loading. The page can then receive it on navigation.
                     self.latestHealthWorkoutsJSON = json
                     self.flushHealthWorkouts()
+                    completion?()
                 }
             }
             healthStore.execute(query)
@@ -291,10 +294,15 @@ struct RunJeetWebView: UIViewRepresentable {
         private func installHealthObservers(for types: [HKSampleType]) {
             for type in types {
                 let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
-                    self?.queryHealthSteps()
-                    self?.queryHealthActivityTotals()
-                    self?.queryHealthWorkouts()
-                    completion()
+                    guard let self else { completion(); return }
+                    let group = DispatchGroup()
+                    group.enter()
+                    self.queryHealthSteps { group.leave() }
+                    group.enter()
+                    self.queryHealthActivityTotals { group.leave() }
+                    group.enter()
+                    self.queryHealthWorkouts { group.leave() }
+                    group.notify(queue: .main) { completion() }
                 }
                 observers.append(query)
                 healthStore.execute(query)
