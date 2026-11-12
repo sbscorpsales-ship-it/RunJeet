@@ -246,6 +246,9 @@ class MainActivity : ComponentActivity() {
                     )
                 )
                 val records = JSONArray()
+                val granted = client.permissionController.getGrantedPermissions()
+                val distanceAllowed = HealthPermission.getReadPermission(DistanceRecord::class) in granted
+                val caloriesAllowed = HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted
                 response.records.sortedByDescending { it.startTime }.forEach { workout ->
                     val activity = when (workout.exerciseType) {
                         ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "Walking"
@@ -260,19 +263,21 @@ class MainActivity : ComponentActivity() {
                     }
                     // Attach distance and active energy recorded during this workout.
                     // These are queried for the session window, not copied from the whole-day totals.
-                    val workoutTotals = client.aggregate(
-                        androidx.health.connect.client.request.AggregateRequest(
-                            metrics = setOf(
-                                DistanceRecord.DISTANCE_TOTAL,
-                                ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
-                            ),
-                            timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(
-                                workout.startTime, workout.endTime
+                    val workoutMetrics = mutableSetOf<androidx.health.connect.client.aggregate.AggregateMetric<*>>()
+                    if (distanceAllowed) workoutMetrics.add(DistanceRecord.DISTANCE_TOTAL)
+                    if (caloriesAllowed) workoutMetrics.add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+                    val workoutTotals = if (workoutMetrics.isNotEmpty()) {
+                        client.aggregate(
+                            androidx.health.connect.client.request.AggregateRequest(
+                                metrics = workoutMetrics,
+                                timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(
+                                    workout.startTime, workout.endTime
+                                )
                             )
                         )
-                    )
-                    val workoutDistance = workoutTotals[DistanceRecord.DISTANCE_TOTAL]?.inMeters
-                    val workoutCalories = workoutTotals[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
+                    } else null
+                    val workoutDistance = if (distanceAllowed) workoutTotals?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters else null
+                    val workoutCalories = if (caloriesAllowed) workoutTotals?.get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)?.inKilocalories else null
                     val record = JSONObject()
                         .put("id", workout.metadata.id ?: "${workout.startTime.toEpochMilli()}-${workout.metadata.dataOrigin.packageName}")
                         .put("activityType", activity)
