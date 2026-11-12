@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
         if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
-        else requestActivityPermission()
+        requestActivityPermission()
     }
 
     private val activityPermissionRequest = registerForActivityResult(
@@ -80,8 +80,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val granted = client.permissionController.getGrantedPermissions()
-                if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
-                else healthPermissionRequest.launch(setOf(RunJeetStepSource.readStepsPermission))
+                if (RunJeetStepSource.readStepsPermission in granted) {
+                    readHealthConnectSteps()
+                    requestActivityPermission()
+                } else healthPermissionRequest.launch(setOf(RunJeetStepSource.readStepsPermission))
             } catch (_: Exception) {
                 requestActivityPermission()
             }
