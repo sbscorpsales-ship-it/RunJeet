@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
         // Health Connect permissions are independent: never block step import
         // just because the user declined optional distance, calorie or workout access.
         if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
-        if (HealthPermission.getReadPermission(DistanceRecord::class) in granted &&
+        if (HealthPermission.getReadPermission(DistanceRecord::class) in granted ||
             HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted) {
             readHealthConnectActivityTotals()
         }
@@ -294,22 +294,28 @@ class MainActivity : ComponentActivity() {
         val client = healthClient ?: return
         lifecycleScope.launch {
             try {
+                // Distance and active-energy access are independent optional grants.
+                // Build the aggregate from only the metrics the user actually allowed.
+                val granted = client.permissionController.getGrantedPermissions()
+                val distanceAllowed = HealthPermission.getReadPermission(DistanceRecord::class) in granted
+                val caloriesAllowed = HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted
+                if (!distanceAllowed && !caloriesAllowed) return@launch
+
+                val metrics = mutableSetOf<androidx.health.connect.client.aggregate.AggregateMetric<*>>()
+                if (distanceAllowed) metrics.add(DistanceRecord.DISTANCE_TOTAL)
+                if (caloriesAllowed) metrics.add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+
                 val start = LocalDate.now(ZoneId.systemDefault())
                     .atStartOfDay(ZoneId.systemDefault()).toInstant()
                 val response = client.aggregate(
                     androidx.health.connect.client.request.AggregateRequest(
-                        metrics = setOf(
-                            DistanceRecord.DISTANCE_TOTAL,
-                            ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
-                        ),
+                        metrics = metrics,
                         timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(start, Instant.now())
                     )
                 )
-                val distanceMeters = response[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
-                val activeCalories = response[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
                 val payload = JSONObject()
-                    .put("distanceMeters", distanceMeters)
-                    .put("activeCalories", activeCalories)
+                    .put("distanceMeters", if (distanceAllowed) response[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0 else JSONObject.NULL)
+                    .put("activeCalories", if (caloriesAllowed) response[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0 else JSONObject.NULL)
                     .put("source", "HEALTH CONNECT")
                 RunJeetWebBridge.emit("runjeetNativeHealth", payload.toString())
             } catch (_: Exception) {
