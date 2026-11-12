@@ -95,7 +95,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 message = "GPS temporarily unavailable. Your activity remains saved; waiting to reconnect."
             }
             let safe = message.replacingOccurrences(of: "'", with: "")
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\\(safe)'}}));"
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\(safe)'}}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
