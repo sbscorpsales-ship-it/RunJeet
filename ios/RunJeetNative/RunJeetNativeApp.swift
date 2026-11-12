@@ -205,7 +205,12 @@ struct RunJeetWebView: UIViewRepresentable {
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
             let query = HKSampleQuery(sampleType: workoutType, predicate: nil, limit: 30, sortDescriptors: [sort]) { [weak self] _, samples, _ in
                 guard let self else { return }
-                let records: [[String: Any]] = (samples as? [HKWorkout] ?? []).map { workout in
+                // RunJeet-created sessions already appear in local history; exclude
+                // this app's own HealthKit writes to prevent duplicate activity rows.
+                let externalWorkouts = (samples as? [HKWorkout] ?? []).filter {
+                    $0.sourceRevision.source.bundleIdentifier != Bundle.main.bundleIdentifier
+                }
+                let records: [[String: Any]] = externalWorkouts.map { workout in
                     let activity: String
                     switch workout.workoutActivityType {
                     case .walking: activity = "Walking"
