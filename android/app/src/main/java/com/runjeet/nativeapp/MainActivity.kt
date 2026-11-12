@@ -18,6 +18,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.units.Energy
 import org.json.JSONObject
 import androidx.lifecycle.lifecycleScope
@@ -31,6 +32,12 @@ class MainActivity : ComponentActivity() {
     private var healthClient: HealthConnectClient? = null
     private var pendingGpsStart = false
     private val writeWorkoutPermissions = setOf(HealthPermission.getWritePermission(ExerciseSessionRecord::class), HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class))
+    private val readHealthPermissions = setOf(
+        RunJeetStepSource.readStepsPermission,
+        HealthPermission.getReadPermission(DistanceRecord::class),
+        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class)
+    )
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -44,7 +51,10 @@ class MainActivity : ComponentActivity() {
     private val healthPermissionRequest = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
-        if (RunJeetStepSource.readStepsPermission in granted) readHealthConnectSteps()
+        if (readHealthPermissions.all { it in granted }) {
+            readHealthConnectSteps()
+            readHealthConnectActivityTotals()
+        }
         requestActivityPermission()
     }
 
@@ -139,11 +149,12 @@ class MainActivity : ComponentActivity() {
             try {
                 val granted = client.permissionController.getGrantedPermissions()
                 val needed = mutableSetOf<String>()
-                if (RunJeetStepSource.readStepsPermission !in granted) needed.add(RunJeetStepSource.readStepsPermission)
+                needed.addAll(readHealthPermissions - granted)
                 needed.addAll(writeWorkoutPermissions - granted)
                 if (needed.isNotEmpty()) healthPermissionRequest.launch(needed)
                 else {
                     readHealthConnectSteps()
+                    readHealthConnectActivityTotals()
                     requestActivityPermission()
                 }
             } catch (_: Exception) {
@@ -213,6 +224,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun readHealthConnectActivityTotals() {
+        val client = healthClient ?: return
+        lifecycleScope.launch {
+            try {
+                val start = LocalDate.now(ZoneId.systemDefault())
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val response = client.aggregate(
+                    androidx.health.connect.client.request.AggregateRequest(
+                        metrics = setOf(
+                            DistanceRecord.DISTANCE_TOTAL,
+                            ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
+                        ),
+                        timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(start, Instant.now())
+                    )
+                )
+                val distanceMeters = response[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+                val activeCalories = response[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+                val payload = JSONObject()
+                    .put("distanceMeters", distanceMeters)
+                    .put("activeCalories", activeCalories)
+                    .put("source", "HEALTH CONNECT")
+                RunJeetWebBridge.emit("runjeetNativeHealth", payload.toString())
+            } catch (_: Exception) {
+                // Keep local activity history available if optional aggregates are unavailable.
+            }
+        }
+    }
+
     private fun requestActivityPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
@@ -240,6 +279,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::webView.isInitialized) {
             readHealthConnectSteps()
+            readHealthConnectActivityTotals()
             dispatchCachedHardwareSteps()
             // Replay the locally buffered GPS route after returning from background.
             // WebView events may have been missed while Android suspended the UI.
