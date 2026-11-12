@@ -82,6 +82,23 @@ struct RunJeetWebView: UIViewRepresentable {
             }
         }
 
+        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+            let code = (error as? CLError)?.code
+            // Core Location can temporarily lose a fix. Keep the workout and
+            // route buffer alive; the next valid fix will continue the same session.
+            let message: String
+            if code == .locationUnknown {
+                message = "GPS signal temporarily unavailable. RunJeet is keeping your activity open and waiting for a new fix."
+            } else if code == .denied {
+                message = "Location access is off. Enable location permission to continue GPS recording. Your saved route is retained."
+            } else {
+                message = "GPS temporarily unavailable. Your activity remains saved; waiting to reconnect."
+            }
+            let safe = message.replacingOccurrences(of: "'", with: "")
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\\(safe)'}}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
+        }
+
         func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
             guard let location = locations.last, location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 60 else { return }
             let point: [String: Double] = ["lat": location.coordinate.latitude, "lon": location.coordinate.longitude, "accuracy": location.horizontalAccuracy, "ts": location.timestamp.timeIntervalSince1970 * 1000]
