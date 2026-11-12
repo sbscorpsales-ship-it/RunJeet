@@ -53,6 +53,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
                 if !self.pedometerActive { self.startPedometer() }
+                self.resumeLocationIfNeeded()
             }
         }
 
@@ -79,6 +80,28 @@ struct RunJeetWebView: UIViewRepresentable {
             } else if command == "requestRoute" {
                 flushStoredRoute()
             }
+        }
+
+        private func resumeLocationIfNeeded() {
+            guard wantsLocationUpdates else { return }
+            guard CLLocationManager.locationServicesEnabled() else {
+                sendLocationStatus("Location Services are turned off. Your activity and saved route are retained; turn Location Services on to resume GPS.")
+                return
+            }
+            let status = locationManager.authorizationStatus
+            guard status == .authorizedAlways || status == .authorizedWhenInUse else {
+                sendLocationStatus("Location permission is needed to resume GPS. Your activity and saved route are retained.")
+                return
+            }
+            locationManager.startUpdatingLocation()
+            locationActive = true
+            sendLocationStatus("GPS recording resumed check. Waiting for the next accurate location fix; your route remains saved on this device.")
+        }
+
+        private func sendLocationStatus(_ message: String) {
+            let safe = message.replacingOccurrences(of: "'", with: "")
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\\(safe)'}}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
         func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
