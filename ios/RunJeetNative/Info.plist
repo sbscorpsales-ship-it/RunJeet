@@ -3,5 +3,9 @@
 <plist version="1.0"><dict>
 <key>NSHealthShareUsageDescription</key><string>RunJeet reads your daily step totals from Apple Health to show accurate activity even when the app is closed.</string>
 <key>NSHealthUpdateUsageDescription</key><string>RunJeet may save workouts you choose to record.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>RunJeet records your route and distance during activities you start.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>RunJeet continues recording an activity you started when your iPhone screen is locked.</string>
+<key>NSLocationAlwaysUsageDescription</key><string>RunJeet needs background location access to continue an activity you started.</string>
+<key>UIBackgroundModes</key><array><string>location</string></array>
 <key>NSMotionUsageDescription</key><string>RunJeet uses motion activity to display your iPhone's pedometer step count.</string>
 </dict></plist>
