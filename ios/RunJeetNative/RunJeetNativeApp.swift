@@ -76,7 +76,7 @@ struct RunJeetWebView: UIViewRepresentable {
             healthStore.execute(query)
         }
 
-        private func installHealthObserver(for type: HKObjectType) {
+        private func installHealthObserver(for type: HKSampleType) {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
                 self?.queryHealthSteps()
                 completion()
