@@ -125,6 +125,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var latestHealthDistance: Double?
         private var latestHealthCalories: Double?
         private var latestHealthWorkoutsJSON: String?
+        private var latestPedometerStatusJSON: String?
         private let routeStorageKey = "runjeet.native.route.v1"
         private var routePoints: [[String: Double]] = UserDefaults.standard.array(forKey: "runjeet.native.route.v1") as? [[String: Double]] ?? []
 
@@ -139,6 +140,7 @@ struct RunJeetWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
             flushLatestSteps()
+            flushPedometerStatus()
             flushHealthTotals()
             flushHealthWorkouts()
             flushStoredRoute()
@@ -293,8 +295,16 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
         private func sendPedometerStatus(_ status: String, message: String) {
-            let safeMessage = message.replacingOccurrences(of: "'", with: "")
-            let script = "window.dispatchEvent(new CustomEvent('runjeetPedometerStatus',{detail:{status:'\(status)',message:'\(safeMessage)'}}));"
+            let payload: [String: String] = ["status": status, "message": message]
+            guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed, .sortedKeys]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            latestPedometerStatusJSON = json
+            flushPedometerStatus()
+        }
+
+        private func flushPedometerStatus() {
+            guard pageLoaded, let json = latestPedometerStatusJSON else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetPedometerStatus',{detail:\(json)}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
