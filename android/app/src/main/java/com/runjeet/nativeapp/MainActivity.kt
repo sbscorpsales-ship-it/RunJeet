@@ -103,7 +103,14 @@ class MainActivity : ComponentActivity() {
                     )
                 )
                 val total = response[StepsRecord.COUNT_TOTAL] ?: 0L
-                dispatchSteps(total, "ANDROID HEALTH CONNECT")
+                if (total > 0L) {
+                    dispatchSteps(total, "ANDROID HEALTH CONNECT")
+                } else {
+                    // Some devices have no Health Connect step provider enabled.
+                    // Fall back to the hardware daily total rather than masking it with zero.
+                    dispatchCachedHardwareSteps()
+                    if (latestSteps == null) dispatchSteps(0L, "ANDROID HEALTH CONNECT")
+                }
             } catch (_: Exception) {
                 requestActivityPermission()
             }
