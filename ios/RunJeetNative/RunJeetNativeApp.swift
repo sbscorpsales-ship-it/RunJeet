@@ -256,9 +256,16 @@ struct RunJeetWebView: UIViewRepresentable {
             let calories = (object["activeCalories"] as? Double) ?? 0
             let distanceQuantity = distance > 0 ? HKQuantity(unit: .meter(), doubleValue: distance) : nil
             let energyQuantity = calories > 0 ? HKQuantity(unit: .kilocalorie(), doubleValue: calories) : nil
-            let workout = HKWorkout(activityType: .walking, start: start, end: end,
+            let activityType: HKWorkoutActivityType
+            switch (object["activityType"] as? String ?? "").lowercased() {
+            case "outdoor run", "run", "running": activityType = .running
+            case "outdoor cycle", "cycle", "cycling", "biking": activityType = .cycling
+            case "outdoor walk", "walk", "walking": activityType = .walking
+            default: activityType = .other
+            }
+            let workout = HKWorkout(activityType: activityType, start: start, end: end,
                                     workoutEvents: nil, totalEnergyBurned: energyQuantity,
-                                    totalDistance: distanceQuantity, metadata: ["HKMetadataKeyWasUserEntered": true])
+                                    totalDistance: distanceQuantity, metadata: [HKMetadataKeyWasUserEntered: true])
             healthStore.save(workout) { _, _ in }
         }
 
