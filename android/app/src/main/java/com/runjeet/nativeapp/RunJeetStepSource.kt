@@ -41,23 +41,32 @@ class RunJeetStepSource(
         val bootId = Settings.Global.getInt(app.contentResolver, "boot_count", 0).toLong()
         val today = LocalDate.now(ZoneId.systemDefault()).toString()
         val savedBoot = prefs.getLong("boot_marker", -1L)
-        val savedDay = prefs.getString("baseline_day", null)
-        val key = "baseline_${bootId}_${today}"
+        val previousDay = prefs.getString("sensor_day", null)
+        val previousTotal = prefs.getLong("last_sensor_total", -1L)
+        val savedDaily = prefs.getLong("latest_daily_steps", 0L)
 
-        var baseline = if (savedBoot == bootId && savedDay == today) {
-            prefs.getLong(key, -1L)
-        } else -1L
-
-        if (baseline < 0L || baseline > totalSinceBoot) {
-            baseline = totalSinceBoot
-            prefs.edit()
-                .putLong("boot_marker", bootId)
-                .putString("baseline_day", today)
-                .putLong(key, baseline)
-                .apply()
+        // TYPE_STEP_COUNTER is cumulative since boot, not since midnight.
+        // Carry the delta between sensor events across a local-day boundary;
+        // resetting the baseline to today's first event would discard steps
+        // already taken after midnight while the service was asleep.
+        val sameBoot = savedBoot == bootId && previousTotal >= 0L && totalSinceBoot >= previousTotal
+        val delta = if (sameBoot) totalSinceBoot - previousTotal else 0L
+        val daily = when {
+            !sameBoot -> 0L
+            previousDay == today -> (savedDaily + delta).coerceAtLeast(0L)
+            else -> delta.coerceAtLeast(0L)
         }
 
-        onDailySteps((totalSinceBoot - baseline).coerceAtLeast(0L), "ANDROID_HARDWARE_PEDOMETER")
+        prefs.edit()
+            .putLong("boot_marker", bootId)
+            .putString("sensor_day", today)
+            .putLong("last_sensor_total", totalSinceBoot)
+            .putLong("latest_daily_steps", daily)
+            .putString("latest_step_source", "ANDROID_HARDWARE_PEDOMETER")
+            .putString("latest_step_date", today)
+            .apply()
+
+        onDailySteps(daily, "ANDROID_HARDWARE_PEDOMETER")
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
