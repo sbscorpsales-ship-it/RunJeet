@@ -272,18 +272,26 @@ class MainActivity : ComponentActivity() {
             try {
                 val start = LocalDate.now(ZoneId.systemDefault()).minusDays(30)
                     .atStartOfDay(ZoneId.systemDefault()).toInstant()
-                val response = client.readRecords(
-                    ReadRecordsRequest(
-                        recordType = ExerciseSessionRecord::class,
-                        timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.after(start),
-                        pageSize = 30
+                val importedWorkouts = mutableListOf<ExerciseSessionRecord>()
+                var pageToken: String? = null
+                do {
+                    val response = client.readRecords(
+                        ReadRecordsRequest(
+                            recordType = ExerciseSessionRecord::class,
+                            timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.after(start),
+                            pageSize = 100,
+                            pageToken = pageToken
+                        )
                     )
-                )
+                    importedWorkouts.addAll(response.records)
+                    pageToken = response.pageToken
+                } while (pageToken != null && importedWorkouts.size < 1000)
+
                 val records = JSONArray()
                 val granted = client.permissionController.getGrantedPermissions()
                 val distanceAllowed = HealthPermission.getReadPermission(DistanceRecord::class) in granted
                 val caloriesAllowed = HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class) in granted
-                response.records.sortedByDescending { it.startTime }.forEach { workout ->
+                importedWorkouts.sortedByDescending { it.startTime }.forEach { workout ->
                     val activity = when (workout.exerciseType) {
                         ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "Walking"
                         ExerciseSessionRecord.EXERCISE_TYPE_RUNNING -> "Running"
