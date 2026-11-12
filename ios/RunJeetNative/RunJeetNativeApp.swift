@@ -440,7 +440,8 @@ struct RunJeetWebView: UIViewRepresentable {
                 if success {
                     self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
                 } else {
-                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(error?.localizedDescription ?? "permission not granted"). Your RunJeet activity remains saved locally.")
+                    let reason = error?.localizedDescription ?? "permission not granted"
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your RunJeet activity remains saved locally.")
                 }
             }
         }
