@@ -41,6 +41,12 @@ class RunJeetPedometerService : Service() {
                     .putString("latest_step_source", source)
                     .putString("latest_step_date", java.time.LocalDate.now().toString())
                     .apply()
+                // Keep the open dashboard live while the foreground service
+                // continues counting in the background.
+                val payload = org.json.JSONObject()
+                    .put("steps", count)
+                    .put("source", source)
+                RunJeetWebBridge.emit("runjeetNativeSteps", payload.toString())
             },
             onStatus = { status, message ->
                 val safeStatus = org.json.JSONObject.quote(status)
