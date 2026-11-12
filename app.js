@@ -77,13 +77,13 @@ function importAppleHealthShortcut(){
  const raw=params.get('gativx_steps')??params.get('steps')??params.get('health_steps');
  const rawDate=params.get('gativx_date')??params.get('date')??params.get('health_date');
  if(raw===null&&rawDate===null){$("stepMessage").textContent="No Apple Health data received. Run the Apple Health import Shortcut.";return false;}
- const countText=String(raw??'').trim().replace(/[,_\\s]/g,'');
+ const countText=String(raw??'').trim().replace(/[,_\s]/g,'');
  const count=Number(countText);
  let date=String(rawDate??'').trim();
- if(/^\\d{1,2}\\/\\d{1,2}\\/\\d{4}$/.test(date)){
+ if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)){
   const parts=date.split('/').map(Number);date=[parts[2],String(parts[1]).padStart(2,'0'),String(parts[0]).padStart(2,'0')].join('-');
  }
- const validDate=/^\\d{4}-\\d{2}-\\d{2}$/.test(date)&&!Number.isNaN(Date.parse(date+'T00:00:00'));
+ const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&!Number.isNaN(Date.parse(date+'T00:00:00'));
  if(!validDate||!Number.isSafeInteger(count)||count<0||count>200000){
   $("stepSource").textContent="APPLE HEALTH IMPORT ERROR";
   $("stepMessage").textContent="Apple Health link received, but its step count/date is invalid. Data was not changed.";
