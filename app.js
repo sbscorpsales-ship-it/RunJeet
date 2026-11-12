@@ -84,7 +84,7 @@ window.addEventListener("runjeetNativeSteps",e=>{
  nativeDailySteps=n;nativeStepSource=source;if(motionHandler){window.removeEventListener("devicemotion",motionHandler);motionHandler=null;}if(state&&db){state.nativeStepsByDay=state.nativeStepsByDay||{};state.nativeStepsByDay[day()]={count:n,source,updatedAt:new Date().toISOString()};save().catch(()=>toast("Step total could not be saved"));render();}
  $("stepMessage").textContent="Daily steps from "+source.toLowerCase();
 });
-window.addEventListener("pagehide",()=>{if(window.webkit?.messageHandlers?.runjeet){if(tick){clearInterval(tick);tick=null;}save().catch(()=>{});return;}stopWatch();if(state?.active&&!state.active.pausedAt){state.active.pausedAt=Date.now();save().catch(()=>{})}});
+window.addEventListener("pagehide",()=>{if(window.RunJeetAndroid||window.webkit?.messageHandlers?.runjeet){if(tick){clearInterval(tick);tick=null;}save().catch(()=>{});return;}stopWatch();if(state?.active&&!state.active.pausedAt){state.active.pausedAt=Date.now();save().catch(()=>{})}});
 window.addEventListener("pageshow",()=>{if(state?.active&&!state.active.pausedAt){if(window.RunJeetAndroid)window.RunJeetAndroid.requestRoute();if(window.webkit?.messageHandlers?.runjeet)window.webkit.messageHandlers.runjeet.postMessage("requestRoute");if(window.RunJeetAndroid||window.webkit?.messageHandlers?.runjeet)startWatch();}});
 init();
 })();
