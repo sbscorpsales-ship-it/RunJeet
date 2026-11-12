@@ -166,7 +166,9 @@ class MainActivity : ComponentActivity() {
                 val records = mutableListOf<androidx.health.connect.client.records.Record>(
                     ExerciseSessionRecord(
                         startTime = start,
+                        startZoneOffset = java.time.ZoneId.systemDefault().rules.getOffset(start),
                         endTime = end,
+                        endZoneOffset = java.time.ZoneId.systemDefault().rules.getOffset(end),
                         exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_WALKING,
                         title = "RunJeet walk",
                         metadata = androidx.health.connect.client.records.metadata.Metadata.manualEntry()
