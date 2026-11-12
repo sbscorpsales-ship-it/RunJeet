@@ -33,13 +33,21 @@ class RunJeetPedometerService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        stepSource = RunJeetStepSource(this) { count, source ->
-            getSharedPreferences(STEPS_PREFS, MODE_PRIVATE).edit()
-                .putLong("latest_daily_steps", count)
-                .putString("latest_step_source", source)
-                .putString("latest_step_date", java.time.LocalDate.now().toString())
-                .apply()
-        }.also { it.start() }
+        stepSource = RunJeetStepSource(
+            this,
+            onDailySteps = { count, source ->
+                getSharedPreferences(STEPS_PREFS, MODE_PRIVATE).edit()
+                    .putLong("latest_daily_steps", count)
+                    .putString("latest_step_source", source)
+                    .putString("latest_step_date", java.time.LocalDate.now().toString())
+                    .apply()
+            },
+            onStatus = { status, message ->
+                val safeStatus = org.json.JSONObject.quote(status)
+                val safeMessage = org.json.JSONObject.quote(message)
+                RunJeetWebBridge.emit("runjeetPedometerStatus", "{status:$safeStatus,message:$safeMessage}")
+            }
+        ).also { it.start() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
