@@ -53,8 +53,9 @@ struct RunJeetWebView: UIViewRepresentable {
             guard let command = message.body as? String else { return }
             if command == "startGPS" {
                 DispatchQueue.main.async {
-                    self.locationManager.requestAlwaysAuthorization()
-                    if CLLocationManager.locationServicesEnabled() {
+                    let status = CLLocationManager.authorizationStatus()
+                    if status == .notDetermined { self.locationManager.requestWhenInUseAuthorization() }
+                    if CLLocationManager.locationServicesEnabled() && (status == .authorizedAlways || status == .authorizedWhenInUse) {
                         self.locationManager.startUpdatingLocation()
                         self.locationActive = true
                     }
@@ -62,12 +63,25 @@ struct RunJeetWebView: UIViewRepresentable {
             } else if command == "stopGPS" {
                 locationManager.stopUpdatingLocation()
                 locationActive = false
+            } else if command == "clearRoute" {
+                routePoints.removeAll()
+                persistRoute()
+            } else if command == "requestRoute" {
+                flushStoredRoute()
             }
         }
 
         func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
             guard let location = locations.last, location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 60 else { return }
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeLocation',{detail:{lat:\(location.coordinate.latitude),lon:\(location.coordinate.longitude),accuracy:\(location.horizontalAccuracy),ts:\(location.timestamp.timeIntervalSince1970 * 1000)}}));"
+            let point: [String: Double] = ["lat": location.coordinate.latitude, "lon": location.coordinate.longitude, "accuracy": location.horizontalAccuracy, "ts": location.timestamp.timeIntervalSince1970 * 1000]
+            if let previous = routePoints.last, let lat = previous["lat"], let lon = previous["lon"], let timestamp = previous["ts"] {
+                let prior = CLLocation(latitude: lat, longitude: lon)
+                if location.timestamp.timeIntervalSince1970 * 1000 - timestamp <= 1500 && location.distance(from: prior) <= 2 { return }
+            }
+            routePoints.append(point)
+            if routePoints.count > 20000 { routePoints.removeFirst(routePoints.count - 20000) }
+            persistRoute()
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeLocation',{detail:{lat:\\(location.coordinate.latitude),lon:\\(location.coordinate.longitude),accuracy:\\(location.horizontalAccuracy),ts:\\(location.timestamp.timeIntervalSince1970 * 1000)}}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
         private let pedometer = CMPedometer()
@@ -79,10 +93,21 @@ struct RunJeetWebView: UIViewRepresentable {
         private var pageLoaded = false
         private var latestSteps: Int?
         private var latestSource = "IPHONE PEDOMETER"
+        private let routeStorageKey = "runjeet.native.route.v1"
+        private var routePoints: [[String: Double]] = UserDefaults.standard.array(forKey: "runjeet.native.route.v1") as? [[String: Double]] ?? []
+
+        private func persistRoute() { UserDefaults.standard.set(routePoints, forKey: routeStorageKey) }
+
+        private func flushStoredRoute() {
+            guard pageLoaded, let data = try? JSONSerialization.data(withJSONObject: routePoints, options: [.fragmentsAllowed, .sortedKeys]), let json = String(data: data, encoding: .utf8) else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeRoute',{detail:{points:\\(json)}}));"
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
+        }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
             flushLatestSteps()
+            flushStoredRoute()
             queryHealthSteps()
         }
 
