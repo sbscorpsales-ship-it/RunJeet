@@ -47,6 +47,13 @@ struct RunJeetWebView: UIViewRepresentable {
             locationManager.distanceFilter = 3
             locationManager.pausesLocationUpdatesAutomatically = false
             locationManager.allowsBackgroundLocationUpdates = true
+            foregroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                self.queryHealthSteps()
+                self.queryHealthActivityTotals()
+                self.queryHealthWorkouts()
+                if !self.pedometerActive { self.startPedometer() }
+            }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -126,6 +133,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var latestHealthCalories: Double?
         private var latestHealthWorkoutsJSON: String?
         private var latestPedometerStatusJSON: String?
+        private var foregroundObserver: NSObjectProtocol?
         private let routeStorageKey = "runjeet.native.route.v1"
         private var routePoints: [[String: Double]] = UserDefaults.standard.array(forKey: "runjeet.native.route.v1") as? [[String: Double]] ?? []
 
@@ -175,7 +183,7 @@ struct RunJeetWebView: UIViewRepresentable {
             let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate,
                                           options: .cumulativeSum) { [weak self] _, result, _ in
-                guard let total = result?.sumQuantity()?.doubleValue(for: .count()) else { return }
+                let total = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
                 self?.sendSteps(Int(total), source: "APPLE HEALTH")
             }
             healthStore.execute(query)
@@ -327,6 +335,7 @@ struct RunJeetWebView: UIViewRepresentable {
             pedometer.queryPedometerData(from: start, to: Date()) { [weak self] data, error in
                 guard let self else { return }
                 if let error {
+                    self.pedometerActive = false
                     self.sendPedometerStatus("ERROR", message: "Pedometer read failed: \(error.localizedDescription)")
                     return
                 }
@@ -336,6 +345,7 @@ struct RunJeetWebView: UIViewRepresentable {
             pedometer.startUpdates(from: start) { [weak self] data, error in
                 guard let self else { return }
                 if let error {
+                    self.pedometerActive = false
                     self.sendPedometerStatus("ERROR", message: "Pedometer update failed: \(error.localizedDescription)")
                     return
                 }
@@ -352,6 +362,8 @@ struct RunJeetWebView: UIViewRepresentable {
             locationActive = false
             observers.forEach { healthStore.stop($0) }
             observers.removeAll()
+            if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
+            foregroundObserver = nil
         }
 
 
@@ -387,6 +399,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 if self.latestSource.contains("HEALTH") && !source.contains("HEALTH") { return }
                 self.latestSteps = max(0, count)
                 self.latestSource = source
+                self.sendPedometerStatus("SYNCED", message: "Daily steps synchronized from \(source.lowercased()).")
                 self.flushLatestSteps()
             }
         }
