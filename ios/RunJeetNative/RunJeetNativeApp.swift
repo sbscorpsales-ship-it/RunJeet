@@ -53,14 +53,16 @@ struct RunJeetWebView: UIViewRepresentable {
             guard let command = message.body as? String else { return }
             if command == "startGPS" {
                 DispatchQueue.main.async {
+                    self.wantsLocationUpdates = true
                     let status = CLLocationManager.authorizationStatus()
-                    if status == .notDetermined { self.locationManager.requestWhenInUseAuthorization() }
+                    if status == .notDetermined || status == .authorizedWhenInUse { self.locationManager.requestAlwaysAuthorization() }
                     if CLLocationManager.locationServicesEnabled() && (status == .authorizedAlways || status == .authorizedWhenInUse) {
                         self.locationManager.startUpdatingLocation()
                         self.locationActive = true
                     }
                 }
             } else if command == "stopGPS" {
+                wantsLocationUpdates = false
                 locationManager.stopUpdatingLocation()
                 locationActive = false
             } else if command == "clearRoute" {
@@ -68,6 +70,14 @@ struct RunJeetWebView: UIViewRepresentable {
                 persistRoute()
             } else if command == "requestRoute" {
                 flushStoredRoute()
+            }
+        }
+
+        func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+            let status = manager.authorizationStatus
+            if wantsLocationUpdates && CLLocationManager.locationServicesEnabled() && (status == .authorizedAlways || status == .authorizedWhenInUse) {
+                manager.startUpdatingLocation()
+                locationActive = true
             }
         }
 
@@ -81,13 +91,14 @@ struct RunJeetWebView: UIViewRepresentable {
             routePoints.append(point)
             if routePoints.count > 20000 { routePoints.removeFirst(routePoints.count - 20000) }
             persistRoute()
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeLocation',{detail:{lat:\\(location.coordinate.latitude),lon:\\(location.coordinate.longitude),accuracy:\\(location.horizontalAccuracy),ts:\\(location.timestamp.timeIntervalSince1970 * 1000)}}));"
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeLocation',{detail:{lat:\(location.coordinate.latitude),lon:\(location.coordinate.longitude),accuracy:\(location.horizontalAccuracy),ts:\(location.timestamp.timeIntervalSince1970 * 1000)}}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
         private let pedometer = CMPedometer()
         private let healthStore = HKHealthStore()
         private let locationManager = CLLocationManager()
         private var locationActive = false
+        private var wantsLocationUpdates = false
         private var pedometerActive = false
         private var observer: HKObserverQuery?
         private var pageLoaded = false
@@ -100,7 +111,7 @@ struct RunJeetWebView: UIViewRepresentable {
 
         private func flushStoredRoute() {
             guard pageLoaded, let data = try? JSONSerialization.data(withJSONObject: routePoints, options: [.fragmentsAllowed, .sortedKeys]), let json = String(data: data, encoding: .utf8) else { return }
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeRoute',{detail:{points:\\(json)}}));"
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeRoute',{detail:{points:\(json)}}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
@@ -164,6 +175,7 @@ struct RunJeetWebView: UIViewRepresentable {
         func stop() {
             pedometer.stopUpdates()
             pedometerActive = false
+            wantsLocationUpdates = false
             locationManager.stopUpdatingLocation()
             locationActive = false
             if let observer { healthStore.stop(observer) }
