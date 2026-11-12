@@ -76,7 +76,7 @@ function importAppleHealthShortcut(){
  const params=new URLSearchParams(window.location.search);
  if(!params.has('gativx_steps')&&!params.has('gativx_date'))return false;
  const raw=params.get('gativx_steps'),date=params.get('gativx_date'),count=Number(raw);
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date||'')||!Number.isSafeInteger(count)||count<0||count>200000){toast('Apple Health shortcut link is invalid. No step data was imported.');return false;}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')||!Number.isSafeInteger(count)||count<0||count>200000){toast('Apple Health shortcut link is invalid. No step data was imported.');return false;}
  state.nativeStepsByDay=state.nativeStepsByDay||{};
  const previous=state.nativeStepsByDay[date];
  const merged=Math.max(Number.isSafeInteger(previous?.count)?previous.count:0,count);
