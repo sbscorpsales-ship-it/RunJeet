@@ -138,10 +138,14 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val granted = client.permissionController.getGrantedPermissions()
-                if (RunJeetStepSource.readStepsPermission in granted) {
+                val needed = mutableSetOf<String>()
+                if (RunJeetStepSource.readStepsPermission !in granted) needed.add(RunJeetStepSource.readStepsPermission)
+                needed.addAll(writeWorkoutPermissions - granted)
+                if (needed.isNotEmpty()) healthPermissionRequest.launch(needed)
+                else {
                     readHealthConnectSteps()
                     requestActivityPermission()
-                } else healthPermissionRequest.launch(setOf(RunJeetStepSource.readStepsPermission) + writeWorkoutPermissions)
+                }
             } catch (_: Exception) {
                 requestActivityPermission()
             }
