@@ -1,4 +1,9 @@
 name: iOS Native Build Check
+
+# Do not cancel an in-progress iOS build when another commit arrives.
+concurrency:
+  group: runjeet-ios-native-build
+  cancel-in-progress: false
 on:
   push:
     branches: [main]
@@ -9,6 +14,7 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
