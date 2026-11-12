@@ -72,6 +72,14 @@ class MainActivity : ComponentActivity() {
         else dispatchSteps(0L, "ANDROID_PEDOMETER_PERMISSION_REQUIRED")
     }
 
+    private val notificationPermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        // Denial never blocks tracking; Android may simply hide the FGS
+        // notification from the notification drawer.
+        connectHealthConnect()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webView = WebView(this).apply {
@@ -89,7 +97,16 @@ class MainActivity : ComponentActivity() {
         RunJeetWebBridge.attach(webView)
         setContentView(webView)
         webView.loadUrl("https://sbscorpsales-ship-it.github.io/RunJeet/")
-        connectHealthConnect()
+        requestNotificationPermissionThenConnect()
+    }
+
+    private fun requestNotificationPermissionThenConnect() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            connectHealthConnect()
+        }
     }
 
     private inner class AndroidCommands {
