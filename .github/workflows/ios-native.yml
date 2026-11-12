@@ -20,6 +20,21 @@ jobs:
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Compile unsigned iPhone device app (free-account sideload build)
+        working-directory: ios
+        run: |
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= build
+      - name: Package unsigned iPhone IPA for local signing
+        run: |
+          mkdir -p ios/ipa/Payload
+          cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
+          cd ios/ipa
+          /usr/bin/zip -qry RunJeet-unsigned.ipa Payload
+      - name: Upload iPhone sideload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: runjeet-iphone-unsigned-ipa
+          path: ios/ipa/RunJeet-unsigned.ipa
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
