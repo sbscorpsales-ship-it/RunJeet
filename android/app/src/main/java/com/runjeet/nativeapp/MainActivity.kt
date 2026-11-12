@@ -163,8 +163,9 @@ class MainActivity : ComponentActivity() {
                 val start = Instant.ofEpochMilli(data.getLong("startTime"))
                 val end = Instant.ofEpochMilli(data.getLong("endTime"))
                 if (!end.isAfter(start)) return@launch
+                val activityName = data.optString("activityType", "Other")
                 val records = mutableListOf<androidx.health.connect.client.records.Record>(
-                    RunJeetHealthRecords.walkingSession(start, end)
+                    RunJeetHealthRecords.session(activityName, start, end)
                 )
                 val calories = data.optDouble("activeCalories", Double.NaN)
                 if (calories.isFinite() && calories > 0.0) {
