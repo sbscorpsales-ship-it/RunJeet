@@ -11,18 +11,31 @@ function distance(a,b){const r=6371000,x=Math.PI/180,d1=(b.lat-a.lat)*x,d2=(b.lo
 const dist=s=>(s?.points||[]).reduce((n,p,i,a)=>i?n+distance(a[i-1],p):0,0);
 const elapsed=s=>s?Math.max(0,Math.floor(((s.pausedAt||s.endedAt||Date.now())-s.startedAt-s.pausedMs)/1000)):0;
 const time=n=>{n=Math.max(0,Math.floor(n||0));return String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0")};
+let routeMap=null,routeLine=null,routeMarkers=null;
 function drawRoute(s){
  const points=s?.points||[],host=$("routeCanvas"),count=$("routePointCount");
  count.textContent=points.length+" GPS POINTS";
- if(!points.length){host.innerHTML='<div class="route-empty">Your recorded route will appear here.</div>';return;}
- if(points.length===1){host.innerHTML='<svg viewBox="0 0 320 220" role="img" aria-label="One GPS point recorded"><circle cx="160" cy="110" r="8" fill="#d9ff43"/><circle cx="160" cy="110" r="16" fill="#d9ff43" opacity=".18"/></svg>';return;}
- const lats=points.map(p=>p.lat),lons=points.map(p=>p.lon),minLat=Math.min(...lats),maxLat=Math.max(...lats),minLon=Math.min(...lons),maxLon=Math.max(...lons);
- const midLat=(minLat+maxLat)/2,cos=Math.max(.01,Math.cos(midLat*Math.PI/180)),dx=Math.max((maxLon-minLon)*cos,0.00001),dy=Math.max(maxLat-minLat,0.00001),scale=Math.min(270/dx,170/dy);
- const w=320,h=220,ox=(w-dx*scale)/2,oy=(h-dy*scale)/2;
- const xy=p=>({x:25+ox+(p.lon-minLon)*cos*scale,y:25+oy+(maxLat-p.lat)*scale});
- const coords=points.map(xy),path=coords.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" ");
- const first=coords[0],last=coords[coords.length-1];
- host.innerHTML='<svg viewBox="0 0 320 220" role="img" aria-label="Recorded GPS route"><path d="'+path+'" fill="none" stroke="#d9ff43" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+first.x+'" cy="'+first.y+'" r="6" fill="#f4f5ed" stroke="#11130d" stroke-width="2"/><circle cx="'+last.x+'" cy="'+last.y+'" r="7" fill="#d9ff43" stroke="#11130d" stroke-width="2"/></svg>';
+ if(!points.length){if(routeMap){routeMap.remove();routeMap=null;routeLine=null;routeMarkers=null;}host.innerHTML='<div class="route-empty">Your recorded route will appear here.</div>';return;}
+ const valid=points.filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+ if(!valid.length)return;
+ if(!window.L){drawRouteFallback(valid,host);return;}
+ if(!routeMap){
+  host.innerHTML="";
+  routeMap=L.map(host,{zoomControl:true,scrollWheelZoom:false}).setView([valid[0].lat,valid[0].lon],16);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(routeMap);
+  routeLine=L.polyline([],{color:"#d9ff43",weight:5,opacity:.95,lineCap:"round",lineJoin:"round"}).addTo(routeMap);
+  routeMarkers=L.layerGroup().addTo(routeMap);
+ }
+ const latlngs=valid.map(p=>[p.lat,p.lon]);
+ routeLine.setLatLngs(latlngs);routeMarkers.clearLayers();
+ L.circleMarker(latlngs[0],{radius:6,color:"#11130d",weight:2,fillColor:"#f4f5ed",fillOpacity:1}).addTo(routeMarkers).bindTooltip("START");
+ L.circleMarker(latlngs[latlngs.length-1],{radius:7,color:"#11130d",weight:2,fillColor:"#d9ff43",fillOpacity:1}).addTo(routeMarkers).bindTooltip("LATEST");
+ if(latlngs.length>1)routeMap.fitBounds(routeLine.getBounds().pad(.15),{animate:false});else routeMap.setView(latlngs[0],17);
+ setTimeout(()=>routeMap.invalidateSize(),50);
+}
+function drawRouteFallback(points,host){
+ const lats=points.map(p=>p.lat),lons=points.map(p=>p.lon),minLat=Math.min(...lats),maxLat=Math.max(...lats),minLon=Math.min(...lons),maxLon=Math.max(...lons),midLat=(minLat+maxLat)/2,cos=Math.max(.01,Math.cos(midLat*Math.PI/180)),dx=Math.max((maxLon-minLon)*cos,.00001),dy=Math.max(maxLat-minLat,.00001),scale=Math.min(270/dx,170/dy),ox=(320-dx*scale)/2,oy=(220-dy*scale)/2,coords=points.map(p=>({x:25+ox+(p.lon-minLon)*cos*scale,y:25+oy+(maxLat-p.lat)*scale})),path=coords.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" "),a=coords[0],b=coords[coords.length-1];
+ host.innerHTML='<svg viewBox="0 0 320 220" role="img" aria-label="Recorded GPS route"><path d="'+path+'" fill="none" stroke="#d9ff43" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+a.x+'" cy="'+a.y+'" r="6" fill="#f4f5ed" stroke="#11130d" stroke-width="2"/><circle cx="'+b.x+'" cy="'+b.y+'" r="7" fill="#d9ff43" stroke="#11130d" stroke-width="2"/></svg>';
 }
 function render(){const n=steps(),s=state.active,d=dist(s),sec=elapsed(s);$("stepSource").textContent=nativeDailySteps===null?"MOTION ESTIMATE":(nativeStepSource||"SYSTEM PEDOMETER");if(nativeDailySteps!==null){$("motionStatus").textContent="Using iPhone system step count";$("enableMotion").hidden=true;}$("steps").textContent=n.toLocaleString();$("stepProgress").style.width=Math.min(100,n/GOAL*100)+"%";$("stepMessage").textContent=n>=GOAL?"Daily goal reached":(GOAL-n).toLocaleString()+" steps to your goal";$("distance").innerHTML=(d/1000).toFixed(2)+' <small>km</small>';$("activeTime").textContent=time(sec);$("pace").textContent=d>0?time(sec/(d/1000)):"—";$("gpsStatus").textContent=!s?"NOT TRACKING":s.pausedAt?"PAUSED":"TRACKING";$("gpsHeadline").textContent=!s?"Ready when you are":s.pausedAt?"Activity paused":"Recording your activity";$("gpsDetail").textContent=!s?"Start a session to record your route and distance.":s.points.length+" GPS points recorded";$("startBtn").disabled=!!s;$("pauseBtn").disabled=!s;$("finishBtn").disabled=!s;$("pauseBtn").textContent=s?.pausedAt?"RESUME":"PAUSE";$("appStatus").textContent=s?"ACTIVITY LIVE":"READY";$("sessionCount").textContent=state.sessions.length+" SAVED";drawRoute(s);$("history").innerHTML=state.sessions.length?state.sessions.slice(0,8).map(a=>'<div class="history-item"><div><strong>'+new Date(a.startedAt).toLocaleDateString()+'</strong><small>'+new Date(a.startedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+'</small></div><div class="history-right">'+((a.distanceM||0)/1000).toFixed(2)+' km<small>'+time(a.durationSec)+'</small></div></div>').join(""):'<div class="empty">Your completed activities will appear here.</div>'}
 async function addStep(){const k=day();state.stepsByDay[k]=(state.stepsByDay[k]||0)+1;render();try{await save()}catch{toast("Could not save step data")}}
