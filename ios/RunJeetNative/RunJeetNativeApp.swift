@@ -105,6 +105,8 @@ struct RunJeetWebView: UIViewRepresentable {
         private var pageLoaded = false
         private var latestSteps: Int?
         private var latestSource = "IPHONE PEDOMETER"
+        private var latestHealthDistance: Double?
+        private var latestHealthCalories: Double?
         private let routeStorageKey = "runjeet.native.route.v1"
         private var routePoints: [[String: Double]] = UserDefaults.standard.array(forKey: "runjeet.native.route.v1") as? [[String: Double]] ?? []
 
@@ -121,6 +123,7 @@ struct RunJeetWebView: UIViewRepresentable {
             flushLatestSteps()
             flushStoredRoute()
             queryHealthSteps()
+            queryHealthActivityTotals()
         }
 
         func requestHealthAccessAndStart() {
@@ -131,10 +134,13 @@ struct RunJeetWebView: UIViewRepresentable {
             }
             let workout = HKObjectType.workoutType()
             let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [steps]) { [weak self] _, _ in
+            let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
+            let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling)!
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [steps, energy, walkRunDistance, cycleDistance]) { [weak self] _, _ in
                 guard let self else { return }
                 self.installHealthObserver(for: steps)
                 self.queryHealthSteps()
+                self.queryHealthActivityTotals()
                 self.startPedometer()
             }
         }
@@ -151,9 +157,53 @@ struct RunJeetWebView: UIViewRepresentable {
             healthStore.execute(query)
         }
 
+        private func queryHealthActivityTotals() {
+            let start = Calendar.current.startOfDay(for: Date())
+            let end = Date()
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+            let group = DispatchGroup()
+            var distanceTotal = 0.0
+            var caloriesTotal = 0.0
+            let distanceTypes: [(HKQuantityTypeIdentifier, HKUnit)] = [
+                (.distanceWalkingRunning, .meter()),
+                (.distanceCycling, .meter())
+            ]
+            for (identifier, unit) in distanceTypes {
+                guard let type = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
+                group.enter()
+                let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
+                    distanceTotal += result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                    group.leave()
+                }
+                healthStore.execute(query)
+            }
+            if let energyType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+                group.enter()
+                let query = HKStatisticsQuery(quantityType: energyType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
+                    caloriesTotal = result?.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+                    group.leave()
+                }
+                healthStore.execute(query)
+            }
+            group.notify(queue: .main) {
+                self.latestHealthDistance = distanceTotal
+                self.latestHealthCalories = caloriesTotal
+                self.flushHealthTotals()
+            }
+        }
+
+        private func flushHealthTotals() {
+            guard pageLoaded, latestHealthDistance != nil || latestHealthCalories != nil else { return }
+            let distance = latestHealthDistance ?? 0
+            let calories = latestHealthCalories ?? 0
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealth',{detail:{distanceMeters:\(distance),activeCalories:\(calories),source:'APPLE HEALTH'}}));"
+            webView?.evaluateJavaScript(script, completionHandler: nil)
+        }
+
         private func installHealthObserver(for type: HKSampleType) {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
                 self?.queryHealthSteps()
+                self?.queryHealthActivityTotals()
                 completion()
             }
             observer = query
