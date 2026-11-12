@@ -338,8 +338,24 @@ class MainActivity : ComponentActivity() {
 
     private fun startHardwarePedometer() {
         val serviceIntent = Intent(this, RunJeetPedometerService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
-        dispatchCachedHardwareSteps()
+        try {
+            ContextCompat.startForegroundService(this, serviceIntent)
+            dispatchCachedHardwareSteps()
+        } catch (_: SecurityException) {
+            RunJeetWebBridge.emit(
+                "runjeetPedometerStatus",
+                JSONObject().put("status", "ERROR")
+                    .put("message", "Android blocked background step counting. Reopen RunJeet and review Activity Recognition and foreground-service permissions.")
+                    .toString()
+            )
+        } catch (_: IllegalStateException) {
+            RunJeetWebBridge.emit(
+                "runjeetPedometerStatus",
+                JSONObject().put("status", "ERROR")
+                    .put("message", "Android could not start the step-counting service. Open RunJeet and try again.")
+                    .toString()
+            )
+        }
     }
 
     private fun dispatchCachedHardwareSteps() {
@@ -358,6 +374,13 @@ class MainActivity : ComponentActivity() {
             readHealthConnectSteps()
             readHealthConnectActivityTotals()
             readHealthConnectWorkouts()
+            // Re-assert the foreground sensor service when the user returns.
+            // START_STICKY also asks Android to recreate it after ordinary process
+            // reclamation; this covers cases where the OS did not recreate it.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
+                startHardwarePedometer()
+            }
             dispatchCachedHardwareSteps()
             // Replay the locally buffered GPS route after returning from background.
             // WebView events may have been missed while Android suspended the UI.
