@@ -51,6 +51,7 @@ struct RunJeetWebView: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let command = message.body as? String else { return }
+            if command.hasPrefix("saveWorkout:") { saveWorkout(command.replacingOccurrences(of: "saveWorkout:", with: "")); return }
             if command == "startGPS" {
                 DispatchQueue.main.async {
                     self.wantsLocationUpdates = true
@@ -128,7 +129,9 @@ struct RunJeetWebView: UIViewRepresentable {
                 startPedometer()
                 return
             }
-            healthStore.requestAuthorization(toShare: [], read: [steps]) { [weak self] _, _ in
+            let workout = HKObjectType.workoutType()
+            let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [steps]) { [weak self] _, _ in
                 guard let self else { return }
                 self.installHealthObserver(for: steps)
                 self.queryHealthSteps()
@@ -179,6 +182,25 @@ struct RunJeetWebView: UIViewRepresentable {
             locationManager.stopUpdatingLocation()
             locationActive = false
             if let observer { healthStore.stop(observer) }
+        }
+
+
+        private func saveWorkout(_ payload: String) {
+            guard let data = payload.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let startMs = object["startTime"] as? Double,
+                  let endMs = object["endTime"] as? Double,
+                  endMs > startMs else { return }
+            let start = Date(timeIntervalSince1970: startMs / 1000)
+            let end = Date(timeIntervalSince1970: endMs / 1000)
+            let distance = (object["distanceM"] as? Double) ?? 0
+            let calories = (object["activeCalories"] as? Double) ?? 0
+            let distanceQuantity = distance > 0 ? HKQuantity(unit: .meter(), doubleValue: distance) : nil
+            let energyQuantity = calories > 0 ? HKQuantity(unit: .kilocalorie(), doubleValue: calories) : nil
+            let workout = HKWorkout(activityType: .walking, start: start, end: end,
+                                    workoutEvents: nil, totalEnergyBurned: energyQuantity,
+                                    totalDistance: distanceQuantity, metadata: ["HKMetadataKeyWasUserEntered": true])
+            healthStore.save(workout) { _, _ in }
         }
 
         private func sendSteps(_ count: Int, source: String) {
