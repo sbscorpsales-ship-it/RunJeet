@@ -63,7 +63,7 @@ class RunJeetStepSource(
         val sameBoot = savedBoot == bootId && previousTotal >= 0L && totalSinceBoot >= previousTotal
         val delta = if (sameBoot) totalSinceBoot - previousTotal else 0L
         val daily = when {
-            !sameBoot -> 0L
+            !sameBoot -> if (previousDay == today) savedDaily.coerceAtLeast(0L) else 0L
             previousDay == today -> (savedDaily + delta).coerceAtLeast(0L)
             else -> delta.coerceAtLeast(0L)
         }
