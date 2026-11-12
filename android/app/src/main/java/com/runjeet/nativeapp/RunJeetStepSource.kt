@@ -60,13 +60,15 @@ class RunJeetStepSource(
         // Carry the delta between sensor events across a local-day boundary;
         // resetting the baseline to today's first event would discard steps
         // already taken after midnight while the service was asleep.
-        val sameBoot = savedBoot == bootId && previousTotal >= 0L && totalSinceBoot >= previousTotal
-        val delta = if (sameBoot) totalSinceBoot - previousTotal else 0L
-        val daily = when {
-            !sameBoot -> if (previousDay == today) savedDaily.coerceAtLeast(0L) else 0L
-            previousDay == today -> (savedDaily + delta).coerceAtLeast(0L)
-            else -> delta.coerceAtLeast(0L)
-        }
+        val daily = RunJeetStepMath.dailyTotal(
+            savedBoot = savedBoot,
+            currentBoot = bootId,
+            previousTotal = previousTotal,
+            currentTotal = totalSinceBoot,
+            previousDay = previousDay,
+            today = today,
+            savedDaily = savedDaily
+        )
 
         prefs.edit()
             .putLong("boot_marker", bootId)
