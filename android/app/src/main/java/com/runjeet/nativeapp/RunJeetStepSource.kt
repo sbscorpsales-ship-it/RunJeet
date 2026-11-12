@@ -22,7 +22,8 @@ import java.time.ZoneId
  */
 class RunJeetStepSource(
     context: Context,
-    private val onDailySteps: (Long, String) -> Unit
+    private val onDailySteps: (Long, String) -> Unit,
+    private val onStatus: (String, String) -> Unit
 ) : SensorEventListener {
     private val app = context.applicationContext
     private val manager = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -30,7 +31,17 @@ class RunJeetStepSource(
     private val prefs = app.getSharedPreferences("runjeet_steps", Context.MODE_PRIVATE)
 
     fun start() {
-        sensor?.let { manager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
+        val stepSensor = sensor
+        if (stepSensor == null) {
+            onStatus("UNAVAILABLE", "This Android device does not expose a hardware step counter.")
+            return
+        }
+        val registered = manager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL)
+        if (!registered) {
+            onStatus("ERROR", "Android could not register the hardware step counter.")
+        } else {
+            onStatus("WAITING", "Hardware step counter registered; waiting for the first sensor reading.")
+        }
     }
 
     fun stop() { manager.unregisterListener(this) }
@@ -67,6 +78,7 @@ class RunJeetStepSource(
             .apply()
 
         onDailySteps(daily, "ANDROID_HARDWARE_PEDOMETER")
+        onStatus("AVAILABLE", "Android hardware step counter is reporting readings.")
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
