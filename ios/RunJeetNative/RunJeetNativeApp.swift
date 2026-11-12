@@ -95,12 +95,12 @@ struct RunJeetWebView: UIViewRepresentable {
             }
             locationManager.startUpdatingLocation()
             locationActive = true
-            sendLocationStatus("GPS recording resumed check. Waiting for the next accurate location fix; your route remains saved on this device.")
+            sendLocationStatus("GPS updates are active again. Waiting for the next accurate location fix; your route remains saved on this device.")
         }
 
         private func sendLocationStatus(_ message: String) {
             let safe = message.replacingOccurrences(of: "'", with: "")
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\\(safe)'}}));"
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeGpsStatus',{detail:{message:'\(safe)'}}));"
             DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
 
