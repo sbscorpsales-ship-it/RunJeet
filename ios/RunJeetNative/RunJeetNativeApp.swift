@@ -172,16 +172,22 @@ struct RunJeetWebView: UIViewRepresentable {
                 guard let type = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
                 group.enter()
                 let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-                    distanceTotal += result?.sumQuantity()?.doubleValue(for: unit) ?? 0
-                    group.leave()
+                    let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                    DispatchQueue.main.async {
+                        distanceTotal += value
+                        group.leave()
+                    }
                 }
                 healthStore.execute(query)
             }
             if let energyType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
                 group.enter()
                 let query = HKStatisticsQuery(quantityType: energyType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-                    caloriesTotal = result?.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
-                    group.leave()
+                    let value = result?.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+                    DispatchQueue.main.async {
+                        caloriesTotal = value
+                        group.leave()
+                    }
                 }
                 healthStore.execute(query)
             }
