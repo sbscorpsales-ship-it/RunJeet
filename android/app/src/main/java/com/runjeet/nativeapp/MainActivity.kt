@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) startHardwarePedometer()
-        else dispatchSteps(0L, "ANDROID_PEDOMETER_PERMISSION_REQUIRED")
+        else RunJeetWebBridge.emit("runjeetPedometerStatus", JSONObject().put("status", "PERMISSION_REQUIRED").put("message", "Allow Activity Recognition to record genuine steps. No step count was recorded.").toString())
     }
 
     private val notificationPermissionRequest = registerForActivityResult(
