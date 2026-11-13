@@ -26,6 +26,8 @@ targets:
         CFBundleVersion: "1"
         CFBundleShortVersionString: "0.1.0"
         UILaunchScreen: {}
+        UIBackgroundModes:
+          - location
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSAppTransportSecurity:
