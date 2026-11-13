@@ -53,6 +53,23 @@
     $("gativxCloudHint").textContent="Signed in as "+authUser.email+". Syncing this device with your shared GATIVX account…";
     status("CONNECTED — SYNCING");
     await ensureProfile();
+    const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
+    for(const [date,record] of Object.entries(localSteps)) {
+      const count=Number(record?.count);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isSafeInteger(count)||count<0) continue;
+      const source=String(record.source||"").toLowerCase();
+      const isHealth=source.includes("healthkit")||source.includes("apple health");
+      const isAndroid=source.includes("android")||source.includes("health connect");
+      const rpc=isHealth?"sync_healthkit_daily_steps":(isAndroid?"sync_device_daily_steps":"sync_motion_daily_steps");
+      const args=isHealth?{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString()}:(isAndroid?{p_log_date:date,p_steps:count,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:record.updatedAt||new Date().toISOString()}:{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString(),p_distance_m:null});
+      enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
+    }
+    const localSessions=window.__GATIVX_LOCAL_SESSIONS__||[];
+    for(const activity of localSessions) {
+      if(activity?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activity.id) && Number.isFinite(activity.startedAt) && Number.isFinite(activity.endedAt)) {
+        enqueue({id:"workout:"+activity.id,type:"workout",activity});
+      }
+    }
     await flushQueue();
     if(latestStepEvent) onSteps(latestStepEvent);
     await pullCloud();
