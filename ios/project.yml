@@ -32,12 +32,12 @@ targets:
           - UIInterfaceOrientationPortrait
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
-        NSMotionUsageDescription: "RunJeet uses your iPhone motion sensor to measure genuine steps."
-        NSLocationWhenInUseUsageDescription: "RunJeet records your GPS route and distance during activities you start."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "RunJeet can continue recording an activity you started when your iPhone is locked."
-        NSLocationAlwaysUsageDescription: "RunJeet uses background location only during an activity you start."
-        NSHealthShareUsageDescription: "RunJeet reads your Apple Health activity data when access is available."
-        NSHealthUpdateUsageDescription: "RunJeet saves workouts to Apple Health when you choose to export them."
+        NSMotionUsageDescription: "GATIVX uses your iPhone motion sensor to measure genuine steps."
+        NSLocationWhenInUseUsageDescription: "GATIVX records your GPS route and distance during activities you start."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "GATIVX can continue recording an activity you started when your iPhone is locked."
+        NSLocationAlwaysUsageDescription: "GATIVX uses background location only during an activity you start."
+        NSHealthShareUsageDescription: "GATIVX reads your Apple Health activity data when access is available."
+        NSHealthUpdateUsageDescription: "GATIVX saves workouts to Apple Health when you choose to export them."
     entitlements:
       path: RunJeetNative/RunJeetNative.entitlements
     settings:
