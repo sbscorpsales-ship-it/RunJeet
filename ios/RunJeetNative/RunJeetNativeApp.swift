@@ -154,6 +154,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var latestSource = "IPHONE PEDOMETER"
         private var latestHealthDistance: Double?
         private var latestHealthCalories: Double?
+        private var latestHealthExerciseMinutes: Double?
         private var latestHealthWorkoutsJSON: String?
         private var latestPedometerStatusJSON: String?
         private var foregroundObserver: NSObjectProtocol?
@@ -190,12 +191,13 @@ struct RunJeetWebView: UIViewRepresentable {
                   let steps = HKObjectType.quantityType(forIdentifier: .stepCount),
                   let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
                   let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
-                  let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling) else {
+                  let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling),
+                  let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) else {
                 sendPedometerStatus("HEALTH_UNAVAILABLE", message: "Apple Health is unavailable. iPhone Motion steps can still be recorded.");
                 return
             }
             let workout = HKObjectType.workoutType()
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance]) { [weak self] success, error in
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime]) { [weak self] success, error in
                 guard let self else { return }
                 DispatchQueue.main.async {
                     if let error {
@@ -206,7 +208,7 @@ struct RunJeetWebView: UIViewRepresentable {
                         self.sendPedometerStatus("HEALTH_REQUESTED", message: "Apple Health access request completed. Checking available records; iPhone Motion steps remain active.")
                     }
                 }
-                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance])
+                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
@@ -233,6 +235,7 @@ struct RunJeetWebView: UIViewRepresentable {
             let group = DispatchGroup()
             var distanceTotal = 0.0
             var caloriesTotal = 0.0
+            var exerciseMinutesTotal = 0.0
             let distanceTypes: [(HKQuantityTypeIdentifier, HKUnit)] = [
                 (.distanceWalkingRunning, .meter()),
                 (.distanceCycling, .meter())
@@ -260,9 +263,21 @@ struct RunJeetWebView: UIViewRepresentable {
                 }
                 healthStore.execute(query)
             }
+            if let exerciseType = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) {
+                group.enter()
+                let query = HKStatisticsQuery(quantityType: exerciseType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
+                    let value = result?.sumQuantity()?.doubleValue(for: .minute()) ?? 0
+                    DispatchQueue.main.async {
+                        exerciseMinutesTotal = value
+                        group.leave()
+                    }
+                }
+                healthStore.execute(query)
+            }
             group.notify(queue: .main) {
                 self.latestHealthDistance = distanceTotal
                 self.latestHealthCalories = caloriesTotal
+                self.latestHealthExerciseMinutes = exerciseMinutesTotal
                 self.flushHealthTotals()
                 completion?()
             }
@@ -320,10 +335,11 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
         private func flushHealthTotals() {
-            guard pageLoaded, latestHealthDistance != nil || latestHealthCalories != nil else { return }
+            guard pageLoaded, latestHealthDistance != nil || latestHealthCalories != nil || latestHealthExerciseMinutes != nil else { return }
             let distance = latestHealthDistance ?? 0
             let calories = latestHealthCalories ?? 0
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealth',{detail:{distanceMeters:\(distance),activeCalories:\(calories),source:'APPLE HEALTH'}}));"
+            let exerciseMinutes = latestHealthExerciseMinutes ?? 0
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealth',{detail:{distanceMeters:\(distance),activeCalories:\(calories),exerciseMinutes:\(exerciseMinutes),source:'APPLE HEALTH'}}));"
             webView?.evaluateJavaScript(script, completionHandler: nil)
         }
 
