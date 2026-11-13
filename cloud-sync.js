@@ -82,7 +82,7 @@
     const local=window.__GATIVX_LOCAL_PROFILE__||{};
     const patch={id:user.id,display_name:existing?.display_name||local.name||user.email?.split("@")[0]||"GATIVX Member",
       goal_purpose:existing?.goal_purpose||local.purpose||null,
-      goal_type:existing?.goal_type||"fitness",target_weight_kg:existing?.target_weight_kg||75};
+      goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,target_weight_kg:existing?.target_weight_kg||75};
     const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
     if(error) throw error;
   }
@@ -162,7 +162,7 @@
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
   window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
-  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
+  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
     if(!window.supabase?.createClient){status("Cloud library did not load. Refresh while connected.",true);return;}
