@@ -58,6 +58,8 @@ function drawRouteFallback(points,host){
 }
 let selectedActivity="Outdoor Walk";
 function setTab(name){document.querySelectorAll(".app-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));$("summaryScreen").hidden=name!=="summary";$("workoutScreen").hidden=name!=="workout";}
+// Keep primary navigation available even if local database startup fails.
+document.querySelectorAll(".app-tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
 function refreshProfileUI(){const p=state.profile,signed=!!p?.signedIn;$("profileStatus").textContent=signed?"PROFILE ACTIVE ON THIS DEVICE":p?"SIGNED OUT":"SIGN IN REQUIRED";$("welcomeName").textContent=signed?"Welcome back, "+p.name:"Welcome to RunJeet";$("profileSummary").textContent=signed?[(p.age?p.age+" yrs":null),(p.heightCm?p.heightCm+" cm":null),(p.weightKg?p.weightKg+" kg":null)].filter(Boolean).join(" • ")||"Your personal fitness journey": "Set up your personal fitness profile";$("profileAvatar").src=p?.photo||"icon.svg";$("dashboardAvatar").src=p?.photo||"icon.svg";$("dashboardGreeting").textContent=signed?"Hello, "+p.name:"Welcome to RunJeet";$("dashboardGoal").textContent=signed?(p.goal||p.purpose||"Every step moves you forward."):"Every step moves you forward."; $("profileDetails").open=!signed;$("profileSave").textContent=signed?"UPDATE MY PROFILE":"SAVE PROFILE ON THIS DEVICE";$("signOutBtn").hidden=!signed;$("profileGoal").setAttribute("title",p?.goal||"");}
 function healthSourceLabel(value){const raw=String(value||"CONNECTED HEALTH").trim();const id=raw.toLowerCase();if(id.includes("com.google.android.apps.fitness")||id.includes("google fit"))return "GOOGLE FIT / HEALTH CONNECT";if(id.includes("com.sec.android.app.shealth")||id.includes("samsung health"))return "SAMSUNG HEALTH";if(id.includes("fitbit"))return "FITBIT";if(id.includes("apple health")||id.includes("healthkit"))return "APPLE HEALTH";if(id.includes("health connect"))return "HEALTH CONNECT";const tail=raw.split(".").filter(Boolean).at(-1)||raw;return tail.replace(/[_-]/g," ").toUpperCase();}
 function estimateCalories(distanceM){const weight=Number(state.profile?.weightKg);return Number.isFinite(weight)&&weight>=30&&weight<=250?Math.round(weight*(Math.max(0,distanceM)/1000)*0.5):null;}
@@ -152,6 +154,6 @@ window.addEventListener("runjeetNativeSteps",e=>{
 });
 window.addEventListener("pagehide",()=>{if(window.RunJeetAndroid||window.webkit?.messageHandlers?.runjeet){if(tick){clearInterval(tick);tick=null;}save().catch(()=>{});return;}stopWatch();if(state?.active&&!state.active.pausedAt){state.active.pausedAt=Date.now();save().catch(()=>{})}});
 window.addEventListener("pageshow",()=>{if(state?.active&&!state.active.pausedAt){if(window.RunJeetAndroid)window.RunJeetAndroid.requestRoute();if(window.webkit?.messageHandlers?.runjeet)window.webkit.messageHandlers.runjeet.postMessage("requestRoute");if(window.RunJeetAndroid||window.webkit?.messageHandlers?.runjeet)startWatch();}});
-document.querySelectorAll(".app-tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+
 init();
 })();
