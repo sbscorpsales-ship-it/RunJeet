@@ -118,7 +118,7 @@ struct RunJeetWebView: UIViewRepresentable {
             // route buffer alive; the next valid fix will continue the same session.
             let message: String
             if code == .locationUnknown {
-                message = "GPS signal temporarily unavailable. RunJeet is keeping your activity open and waiting for a new fix."
+                message = "GPS signal temporarily unavailable. GATIVX is keeping your activity open and waiting for a new fix."
             } else if code == .denied {
                 message = "Location access is off. Enable location permission to continue GPS recording. Your saved route is retained."
             } else {
@@ -389,7 +389,7 @@ struct RunJeetWebView: UIViewRepresentable {
             guard !pedometerActive else { return }
             switch CMPedometer.authorizationStatus() {
             case .denied, .restricted:
-                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
+                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for GATIVX in iPhone Settings.")
                 return
             default:
                 break
@@ -446,11 +446,11 @@ struct RunJeetWebView: UIViewRepresentable {
                   let startMs = object["startTime"] as? Double,
                   let endMs = object["endTime"] as? Double,
                   endMs > startMs else {
-                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your GATIVX activity remains saved locally.")
                 return
             }
             guard HKHealthStore.isHealthDataAvailable() else {
-                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your GATIVX activity remains saved locally.")
                 return
             }
             let start = Date(timeIntervalSince1970: startMs / 1000)
@@ -475,7 +475,7 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
                 } else {
                     let reason = error?.localizedDescription ?? "permission not granted"
-                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your RunJeet activity remains saved locally.")
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your GATIVX activity remains saved locally.")
                 }
             }
         }
