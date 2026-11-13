@@ -63,8 +63,8 @@
     const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
     if(readError) throw readError;
     const local=window.__GATIVX_LOCAL_PROFILE__||{};
-    const patch={id:user.id,display_name:local.name||existing?.display_name||user.email?.split("@")[0]||"GATIVX Member",
-      goal_purpose:local.purpose||existing?.goal_purpose||null,
+    const patch={id:user.id,display_name:existing?.display_name||local.name||user.email?.split("@")[0]||"GATIVX Member",
+      goal_purpose:existing?.goal_purpose||local.purpose||null,
       goal_type:existing?.goal_type||"fitness",target_weight_kg:existing?.target_weight_kg||75};
     const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
     if(error) throw error;
@@ -126,13 +126,14 @@
       .on("postgres_changes",{event:"*",schema:"public",table:"daily_logs",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"motion_daily_steps",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"activity_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
+      .on("postgres_changes",{event:"*",schema:"public",table:"walk_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .subscribe();
   }
   function onSteps(e) {
     latestStepEvent=e;
     const n=Number(e.detail?.steps), source=String(e.detail?.source||"").toLowerCase();
     if(!Number.isSafeInteger(n)||n<0)return;
-    const date=day(), updatedAt=new Date().toISOString();
+    const date=e.detail?.date||day(), updatedAt=e.detail?.updatedAt||new Date().toISOString();
     const isHealth=source.includes("healthkit")||source.includes("apple health");
     const isAndroid=source.includes("android")||source.includes("health connect");
     const rpc=isHealth?"sync_healthkit_daily_steps":(isAndroid?"sync_device_daily_steps":"sync_motion_daily_steps");
