@@ -53,3 +53,11 @@ footer{color:#8299b3}
 footer span{color:var(--blue)}
 #toast{background:var(--lime);color:#0b1420}
 @media(min-width:600px){.workout-grid{grid-template-columns:1fr 1fr}}
+
+.calorie-insight-card{background:linear-gradient(145deg,#14243a,#0e1726 72%);border:1px solid #29415c;border-radius:19px;padding:18px;margin:0 0 13px}
+.calorie-insight-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+.calorie-insight-grid>div{background:#0a1422;border:1px solid #263e57;border-radius:12px;padding:13px;min-width:0}
+.calorie-insight-grid small{display:block;font:9px 'DM Mono',monospace;letter-spacing:.8px;color:var(--muted);min-height:25px}
+.calorie-insight-grid strong{display:block;font-size:18px;line-height:1.3;color:var(--lime);overflow-wrap:anywhere}
+.calorie-insight-grid em{display:block;font-style:normal;font-size:9px;color:var(--muted);margin-top:4px}
+.calorie-insight-card>p{font-size:10px;line-height:1.55;color:var(--muted);margin:12px 0 0}
