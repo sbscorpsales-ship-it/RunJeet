@@ -1,10 +1,12 @@
 # GATIVX — Founding Charter
 **Status:** Permanent product doctrine  
 **Applies to:** iOS, Android, web, cloud services, product design, coaching, community, data and business decisions  
-**Version:** 1.0
+**Version:** 1.1
 
 ## Brand meaning
-**GATIVX = Goals · Act · Achieve Targets · Training · Vitality & Vision · Xcellence.**
+**GATIVX = Goal · Ambition · Transform · Inspire · Vitality · Xcellence.**
+
+This is the founder-approved acronym and exact brand meaning. Preserve these six words and their order across every platform, document, design and communication. No word may be substituted, expanded into a different phrase, reordered or reinterpreted without the founder's explicit permission.
 
 GATIVX exists to help people move from simply setting a goal to achieving meaningful, lasting excellence.
 
