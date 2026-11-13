@@ -1,4 +1,9 @@
-# RunJeet
+# GATIVX
+
+> **Move. Progress. Transform.**  
+> **Every Move Matters. Every Goal Counts.**
+
+GATIVX means **Goals · Act · Achieve Targets · Training · Vitality & Vision · Xcellence**. Its permanent vision, mission, values, Guru philosophy and non-negotiable product principles are defined in [`docs/GATIVX_FOUNDING_CHARTER.md`](docs/GATIVX_FOUNDING_CHARTER.md). This charter governs product decisions across iOS, Android, web and cloud.
 
 RunJeet is a device-first fitness tracker with a web dashboard hosted on GitHub Pages and native Android/iOS shells.
 
@@ -18,7 +23,7 @@ RunJeet is a device-first fitness tracker with a web dashboard hosted on GitHub 
 - The GitHub Pages browser/PWA version cannot provide the same reliable screen-off sensor and GPS behavior as the native apps.
 - GPS is intended for an explicitly started workout, not continuous all-day location collection.
 - Steps, distance and calories are shown only when sourced from the device/health platform or clearly identified as estimates. No browser accelerometer step estimates are used.
-- Profile, sessions and route history are stored on the device. There is no server authentication or automatic cross-device cloud sync yet.
+- The shared cloud account and cross-device sync foundation is implemented in the current development branch. It still requires CI, schema/runtime review and physical-device acceptance testing before being described as production-verified.
 
 ## Build and verification
 - Android CI runs unit tests, assembles a debug APK and uploads it as a workflow artifact.
