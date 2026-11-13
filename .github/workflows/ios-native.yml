@@ -45,7 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gativx-iphone-unsigned-ipa
-          path: ios/ipa/RunJeet-unsigned.ipa
+          path: ios/ipa/GATIVX-unsigned.ipa
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
