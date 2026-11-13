@@ -73,7 +73,7 @@ function renderDailyActionPlan(){
  const purpose=String(state.profile?.purpose||"").trim();
  const actions=[
   {id:"move",title:"Move your body",detail:"Take a comfortable 10-minute walk or choose movement that suits you today."},
-  {id:"goal",title:"Make one move towards your goal",detail:"Give 15 focused minutes to one small action connected to "+(goal||"your goal")+"."},
+  {id:"goal",title:"Make one move towards your goal",detail:"Give 15 focused minutes to one small action connected to "+escapeHtml(goal||"your goal")+"."},
   {id:"reflect",title:"Pause and reflect",detail:"Take 2 minutes to notice what went well and choose tomorrow’s first step."}
  ];
  const count=actions.filter(a=>done[a.id]).length;
