@@ -6,7 +6,7 @@
   const URL = "https://crarbbsvcczwmtvxyrxo.supabase.co";
   const KEY = "sb_publishable_XAGRFtrWrFqJ-SfXh2WbRQ_jCcPnr-6";
   const QUEUE_KEY = "gativx-sync-outbox-v1";
-  let client = null, user = null, busy = false, realtime = null;
+  let client = null, user = null, busy = false, realtime = null, latestStepEvent = null;
   const $ = id => document.getElementById(id);
   const day = d => {
     const x = d ? new Date(d) : new Date();
@@ -54,6 +54,7 @@
     status("CONNECTED — SYNCING");
     await ensureProfile();
     await flushQueue();
+    if(latestStepEvent) onSteps(latestStepEvent);
     await pullCloud();
     subscribe();
     status("CONNECTED — LAST SYNC "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
@@ -80,12 +81,8 @@
     }
     if(item.type==="workout") {
       const a=item.activity;
-      const {error}=await client.rpc("sync_activity_session_steps",{p_session_id:a.id,p_activity:a.activityType||"Walk",p_started_at:new Date(a.startedAt).toISOString(),p_finished_at:new Date(a.endedAt).toISOString(),p_steps:null});
+      const {error}=await client.rpc("sync_walk_session_route",{p_session_id:a.id,p_started_at:new Date(a.startedAt).toISOString(),p_finished_at:new Date(a.endedAt).toISOString(),p_duration_seconds:Math.max(0,Math.round(a.durationSec||((a.endedAt-a.startedAt)/1000))),p_distance_m:Math.max(0,Number(a.distanceM)||0),p_steps:null,p_route_points:Array.isArray(a.points)?a.points.map(p=>({lat:p.lat,lon:p.lon,accuracy:p.accuracy,ts:p.ts})):[]});
       if(error) throw error;
-      if(Array.isArray(a.points)) {
-        const {error:routeError}=await client.rpc("sync_activity_session_route",{p_session_id:a.id,p_route_points:a.points.map(p=>({lat:p.lat,lon:p.lon,accuracy:p.accuracy,ts:p.ts}))});
-        if(routeError) throw routeError;
-      }
     }
   }
   async function flushQueue() {
@@ -132,16 +129,18 @@
       .subscribe();
   }
   function onSteps(e) {
+    latestStepEvent=e;
     const n=Number(e.detail?.steps), source=String(e.detail?.source||"").toLowerCase();
-    if(!Number.isSafeInteger(n)||n<0||!user)return;
+    if(!Number.isSafeInteger(n)||n<0)return;
     const date=day(), updatedAt=new Date().toISOString();
     const isHealth=source.includes("healthkit")||source.includes("apple health");
-    const rpc=isHealth?"sync_healthkit_daily_steps":"sync_motion_daily_steps";
-    const args=isHealth?{p_log_date:date,p_steps:n,p_updated_at:updatedAt}:{p_log_date:date,p_steps:n,p_updated_at:updatedAt,p_distance_m:null};
+    const isAndroid=source.includes("android")||source.includes("health connect");
+    const rpc=isHealth?"sync_healthkit_daily_steps":(isAndroid?"sync_device_daily_steps":"sync_motion_daily_steps");
+    const args=isHealth?{p_log_date:date,p_steps:n,p_updated_at:updatedAt}:(isAndroid?{p_log_date:date,p_steps:n,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:updatedAt}:{p_log_date:date,p_steps:n,p_updated_at:updatedAt,p_distance_m:null});
     enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
   }
   window.addEventListener("runjeetNativeSteps",onSteps);
-  window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id||!user)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
+  window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
   window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
