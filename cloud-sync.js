@@ -70,7 +70,7 @@
         enqueue({id:"workout:"+activity.id,type:"workout",activity});
       }
     }
-    await flushQueue();
+    for(const [date,completed] of Object.entries(window.__GATIVX_LOCAL_DAILY_ACTIONS__||{})){enqueue({id:"actions:"+date,type:"daily_actions",date,completed,updatedAt:window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[date]||new Date().toISOString()});}\n    await flushQueue();
     if(latestStepEvent) onSteps(latestStepEvent);
     await pullCloud();
     subscribe();
@@ -96,7 +96,7 @@
     if(item.type==="steps") {
       const {error}=await client.rpc(item.rpc,item.args); if(error) throw error; return;
     }
-    if(item.type==="workout") {
+    if(item.type==="daily_actions") {\n      const {error}=await client.from("daily_action_progress").upsert({user_id:user.id,action_date:item.date,completed:item.completed,updated_at:item.updatedAt||new Date().toISOString()},{onConflict:"user_id,action_date"}); if(error) throw error; return;\n    }\n    if(item.type==="workout") {
       const a=item.activity;
       const {error}=await client.rpc("sync_walk_session_route",{p_session_id:a.id,p_started_at:new Date(a.startedAt).toISOString(),p_finished_at:new Date(a.endedAt).toISOString(),p_duration_seconds:Math.max(0,Math.round(a.durationSec||((a.endedAt-a.startedAt)/1000))),p_distance_m:Math.max(0,Number(a.distanceM)||0),p_steps:null,p_route_points:Array.isArray(a.points)?a.points.map(p=>({lat:p.lat,lon:p.lon,accuracy:p.accuracy,ts:p.ts})):[]});
       if(error) throw error;
@@ -114,14 +114,14 @@
   }
   async function pullCloud() {
     if(!user)return;
-    const [profile,steps,motion,activities,walks]=await Promise.all([
+    const [profile,steps,motion,activities,walks,dailyActions]=await Promise.all([
       client.from("profiles").select("*").eq("id",user.id).maybeSingle(),
       client.from("daily_logs").select("log_date,steps,steps_source,active_energy_kcal").eq("user_id",user.id).order("log_date",{ascending:false}).limit(90),
       client.from("motion_daily_steps").select("log_date,steps,source,measured_at").eq("user_id",user.id).order("log_date",{ascending:false}).limit(90),
       client.from("activity_sessions").select("session_id,activity,started_at,finished_at,steps,source,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100),
-      client.from("walk_sessions").select("id,started_at,finished_at,duration_seconds,distance_m,steps,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100)
+      client.from("walk_sessions").select("id,started_at,finished_at,duration_seconds,distance_m,steps,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100),\n      client.from("daily_action_progress").select("action_date,completed,updated_at").eq("user_id",user.id).order("action_date",{ascending:false}).limit(90)
     ]);
-    for(const r of [profile,steps,motion,activities,walks]) if(r.error) throw r.error;
+    for(const r of [profile,steps,motion,activities,walks,dailyActions]) if(r.error) throw r.error;
     const p=profile.data;
     if(p) {
       const local=window.__GATIVX_LOCAL_PROFILE__||{};
@@ -135,7 +135,7 @@
     const records=new Map();
     for(const a of activities.data||[]) records.set(a.session_id,{id:a.session_id,activityType:a.activity,startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:Math.max(0,(Date.parse(a.finished_at)-Date.parse(a.started_at))/1000),points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
     for(const a of walks.data||[]) records.set(a.id,{id:a.id,activityType:"Walk",startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:a.duration_seconds,distanceM:Number(a.distance_m)||0,points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
-    window.dispatchEvent(new CustomEvent("gativxCloudHistory",{detail:[...records.values()].filter(x=>Number.isFinite(x.startedAt)).sort((a,b)=>b.startedAt-a.startedAt)}));
+    window.dispatchEvent(new CustomEvent("gativxCloudHistory",{detail:[...records.values()].filter(x=>Number.isFinite(x.startedAt)).sort((a,b)=>b.startedAt-a.startedAt)}));\n    for(const row of dailyActions.data||[]) window.dispatchEvent(new CustomEvent("gativxDailyActionsCloud",{detail:{date:row.action_date,completed:row.completed,updatedAt:row.updated_at}}));
   }
   function subscribe() {
     if(realtime) client.removeChannel(realtime);
@@ -143,7 +143,7 @@
       .on("postgres_changes",{event:"*",schema:"public",table:"daily_logs",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"motion_daily_steps",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"activity_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
-      .on("postgres_changes",{event:"*",schema:"public",table:"walk_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
+      .on("postgres_changes",{event:"*",schema:"public",table:"walk_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))\n      .on("postgres_changes",{event:"*",schema:"public",table:"daily_action_progress",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .subscribe();
   }
   function onSteps(e) {
@@ -162,7 +162,7 @@
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
   window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
-  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
+  window.addEventListener("gativxDailyActionsChanged",e=>{if(!user)return;const d=e.detail||{};if(d.source==="cloud"||!/^\\d{4}-\\d{2}-\\d{2}$/.test(d.date)||!d.completed||typeof d.completed!=="object")return;enqueue({id:"actions:"+d.date,type:"daily_actions",date:d.date,completed:d.completed,updatedAt:d.updatedAt||new Date().toISOString()});});\n  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
     if(!window.supabase?.createClient){status("Cloud library did not load. Refresh while connected.",true);return;}
