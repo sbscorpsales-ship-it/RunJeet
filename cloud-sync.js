@@ -77,11 +77,11 @@
     status("CONNECTED — LAST SYNC "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
   }
   async function ensureProfile() {
-    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
+    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_text,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
     if(readError) throw readError;
     const local=window.__GATIVX_LOCAL_PROFILE__||{};
     const patch={id:user.id,display_name:existing?.display_name||local.name||user.email?.split("@")[0]||"GATIVX Member",
-      goal_purpose:existing?.goal_purpose||local.purpose||null,
+      goal_purpose:existing?.goal_purpose||local.purpose||null,goal_text:existing?.goal_text||local.goal||null,
       goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,target_weight_kg:existing?.target_weight_kg||75};
     const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
     if(error) throw error;
@@ -125,7 +125,7 @@
     const p=profile.data;
     if(p) {
       const local=window.__GATIVX_LOCAL_PROFILE__||{};
-      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,cloudUserId:user.id,signedIn:true};
+      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goal:p.goal_text||local.goal,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,cloudUserId:user.id,signedIn:true};
       window.__GATIVX_CLOUD_PROFILE__=merged;
       window.dispatchEvent(new CustomEvent("gativxCloudProfile",{detail:merged}));
     }
@@ -162,7 +162,7 @@
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
   window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
-  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
+  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
     if(!window.supabase?.createClient){status("Cloud library did not load. Refresh while connected.",true);return;}
