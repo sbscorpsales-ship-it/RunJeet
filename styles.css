@@ -61,3 +61,16 @@ footer span{color:var(--blue)}
 .calorie-insight-grid strong{display:block;font-size:18px;line-height:1.3;color:var(--lime);overflow-wrap:anywhere}
 .calorie-insight-grid em{display:block;font-style:normal;font-size:9px;color:var(--muted);margin-top:4px}
 .calorie-insight-card>p{font-size:10px;line-height:1.55;color:var(--muted);margin:12px 0 0}
+
+
+/* Dashboard presentation pass — visual-only; app.js, tracking, IDs and data flow untouched */
+.guru-card{position:relative;isolation:isolate;overflow:hidden;margin:0 0 15px;padding:19px;border:1px solid #54718c;border-radius:22px;background:radial-gradient(circle at 92% 8%,#8b7cff30,transparent 34%),linear-gradient(145deg,#172d48,#101b2d 70%);box-shadow:0 18px 42px #0005}
+.guru-card:after{content:"";position:absolute;z-index:-1;width:190px;height:190px;right:-88px;bottom:-112px;border:1px solid #d9ff3630;border-radius:50%;box-shadow:0 0 0 18px #d9ff3608,0 0 0 38px #35c8ff08}
+.guru-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.guru-heading h2{font-size:22px;letter-spacing:1.1px;margin:6px 0 4px}.guru-heading h2 span{color:var(--lime)}.guru-heading p{margin:0;color:#b5c8dc;font-size:11px}
+.guru-orb{width:49px;height:49px;flex:0 0 49px;display:grid;place-items:center;border-radius:17px;color:#101827;font-size:25px;background:linear-gradient(145deg,var(--lime),#7de4ff);box-shadow:0 0 25px #35c8ff30}
+.guru-purpose{margin:17px 0 14px;padding:13px 14px;border-radius:13px;background:#081523a8;border:1px solid #38516a}.guru-purpose small,.guru-checkin>label{font:9px 'DM Mono',monospace;letter-spacing:.9px;color:var(--blue)}.guru-purpose p{font-size:12px;line-height:1.55;color:#e6f0fb;margin:7px 0 0}
+.guru-checkin{display:grid;gap:8px}.guru-checkin>label{margin-top:4px}.guru-checkin>label span{color:#8197af}.guru-checkin select,.guru-checkin textarea{width:100%;border:1px solid #36516d;border-radius:10px;background:#091625;color:#f4f8ff;padding:12px;font:12px Manrope,system-ui;outline:none}.guru-checkin select:focus,.guru-checkin textarea:focus{border-color:var(--blue)}.guru-checkin textarea{resize:vertical;min-height:56px}.guru-checkin .primary-button{width:100%;margin-top:3px;min-height:43px}
+.guru-response{margin-top:13px;padding:13px 14px;border-radius:13px;border:1px solid #d9ff3640;background:linear-gradient(110deg,#d9ff3612,#35c8ff0b)}.guru-response strong{font-size:11px;color:var(--lime)}.guru-response p{margin:6px 0 0;color:#e2edf8;font-size:11px;line-height:1.5}.guru-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px}.guru-foot>span{font:9px 'DM Mono',monospace;letter-spacing:.7px;color:#91a8bf}.guru-foot .text-button{font-size:9px}
+.dashboard-welcome{padding-top:25px}.dashboard-welcome h1{max-width:520px}.profile-card{margin-top:14px}.rings-card .card-top,.step-card .card-top,.history-card .card-top,.sync-card .card-top{align-items:center}
+@media(max-width:390px){.guru-card{padding:16px}.guru-heading h2{font-size:20px}.guru-orb{width:43px;height:43px;flex-basis:43px}.guru-purpose{padding:11px}.guru-foot>span{font-size:8px}}
