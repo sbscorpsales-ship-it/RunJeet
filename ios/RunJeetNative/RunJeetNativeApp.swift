@@ -181,22 +181,35 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
         func requestHealthAccessAndStart() {
+            // Core Motion is independent of HealthKit. Start it immediately so
+            // a HealthKit prompt, denial, or unavailable entitlement can never
+            // leave the primary step counter stuck at zero.
+            startPedometer()
+
             guard HKHealthStore.isHealthDataAvailable(),
-                  let steps = HKObjectType.quantityType(forIdentifier: .stepCount) else {
-                startPedometer()
+                  let steps = HKObjectType.quantityType(forIdentifier: .stepCount),
+                  let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
+                  let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
+                  let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling) else {
+                sendPedometerStatus("HEALTH_UNAVAILABLE", message: "Apple Health is unavailable. iPhone Motion steps can still be recorded.");
                 return
             }
             let workout = HKObjectType.workoutType()
-            let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
-            let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
-            let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling)!
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance]) { [weak self] _, _ in
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance]) { [weak self] success, error in
                 guard let self else { return }
+                DispatchQueue.main.async {
+                    if let error {
+                        self.sendPedometerStatus("HEALTH_PERMISSION_ERROR", message: "Apple Health permission request failed: \\(error.localizedDescription). iPhone Motion steps remain active.")
+                    } else if !success {
+                        self.sendPedometerStatus("HEALTH_PERMISSION_UNCONFIRMED", message: "Apple Health permission was not confirmed. iPhone Motion steps remain active.")
+                    } else {
+                        self.sendPedometerStatus("HEALTH_REQUESTED", message: "Apple Health access request completed. Checking available records; iPhone Motion steps remain active.")
+                    }
+                }
                 self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
-                self.startPedometer()
             }
         }
 
