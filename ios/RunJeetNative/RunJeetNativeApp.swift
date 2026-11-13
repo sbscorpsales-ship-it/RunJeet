@@ -336,10 +336,15 @@ struct RunJeetWebView: UIViewRepresentable {
 
         private func flushHealthTotals() {
             guard pageLoaded, latestHealthDistance != nil || latestHealthCalories != nil || latestHealthExerciseMinutes != nil else { return }
-            let distance = latestHealthDistance ?? 0
-            let calories = latestHealthCalories ?? 0
-            let exerciseMinutes = latestHealthExerciseMinutes ?? 0
-            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealth',{detail:{distanceMeters:\(distance),activeCalories:\(calories),exerciseMinutes:\(exerciseMinutes),source:'APPLE HEALTH'}}));"
+            let payload: [String: Any] = [
+                "distanceMeters": latestHealthDistance as Any? ?? NSNull(),
+                "activeCalories": latestHealthCalories as Any? ?? NSNull(),
+                "exerciseMinutes": latestHealthExerciseMinutes as Any? ?? NSNull(),
+                "source": "APPLE HEALTH"
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let script = "window.dispatchEvent(new CustomEvent('runjeetNativeHealth',{detail:\(json)}));"
             webView?.evaluateJavaScript(script, completionHandler: nil)
         }
 
