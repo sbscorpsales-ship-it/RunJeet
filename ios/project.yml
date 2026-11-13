@@ -21,7 +21,7 @@ targets:
     info:
       path: RunJeetNative/Info.plist
       properties:
-        CFBundleDisplayName: RunJeet
+        CFBundleDisplayName: GATIVX
         CFBundleIdentifier: com.runjeet.nativeapp
         CFBundleVersion: "1"
         CFBundleShortVersionString: "0.1.0"
