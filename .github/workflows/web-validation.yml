@@ -5,6 +5,7 @@ on:
     paths:
       - 'app.js'
       - 'cloud-sync.js'
+      - 'sw.js'
       - '.github/workflows/web-validation.yml'
   push:
     branches: [main]
