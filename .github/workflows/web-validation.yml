@@ -1,0 +1,31 @@
+name: GATIVX Web JavaScript Validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'cloud-sync.js'
+      - '.github/workflows/web-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'cloud-sync.js'
+      - '.github/workflows/web-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check cloud-sync.js
+      - name: Check patch whitespace
+        run: git diff --check
