@@ -233,9 +233,9 @@ struct RunJeetWebView: UIViewRepresentable {
             let end = Date()
             let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
             let group = DispatchGroup()
-            var distanceTotal = 0.0
-            var caloriesTotal = 0.0
-            var exerciseMinutesTotal = 0.0
+            var distanceTotal: Double?
+            var caloriesTotal: Double?
+            var exerciseMinutesTotal: Double?
             let distanceTypes: [(HKQuantityTypeIdentifier, HKUnit)] = [
                 (.distanceWalkingRunning, .meter()),
                 (.distanceCycling, .meter())
@@ -244,9 +244,9 @@ struct RunJeetWebView: UIViewRepresentable {
                 guard let type = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
                 group.enter()
                 let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-                    let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                    let value = result?.sumQuantity()?.doubleValue(for: unit)
                     DispatchQueue.main.async {
-                        distanceTotal += value
+                        if let value { distanceTotal = (distanceTotal ?? 0) + value }
                         group.leave()
                     }
                 }
@@ -255,7 +255,7 @@ struct RunJeetWebView: UIViewRepresentable {
             if let energyType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
                 group.enter()
                 let query = HKStatisticsQuery(quantityType: energyType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-                    let value = result?.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+                    let value = result?.sumQuantity()?.doubleValue(for: .kilocalorie())
                     DispatchQueue.main.async {
                         caloriesTotal = value
                         group.leave()
@@ -266,7 +266,7 @@ struct RunJeetWebView: UIViewRepresentable {
             if let exerciseType = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) {
                 group.enter()
                 let query = HKStatisticsQuery(quantityType: exerciseType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-                    let value = result?.sumQuantity()?.doubleValue(for: .minute()) ?? 0
+                    let value = result?.sumQuantity()?.doubleValue(for: .minute())
                     DispatchQueue.main.async {
                         exerciseMinutesTotal = value
                         group.leave()
