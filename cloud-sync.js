@@ -70,7 +70,6 @@
         enqueue({id:"workout:"+activity.id,type:"workout",activity});
       }
     }
-    for(const [date,completed] of Object.entries(window.__GATIVX_LOCAL_DAILY_ACTIONS__||{})){enqueue({id:"actions:"+date,type:"daily_actions",date,completed,updatedAt:window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[date]||new Date().toISOString()});}
     await flushQueue();
     if(latestStepEvent) onSteps(latestStepEvent);
     await pullCloud();
@@ -141,7 +140,16 @@
     for(const a of activities.data||[]) records.set(a.session_id,{id:a.session_id,activityType:a.activity,startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:Math.max(0,(Date.parse(a.finished_at)-Date.parse(a.started_at))/1000),points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
     for(const a of walks.data||[]) records.set(a.id,{id:a.id,activityType:"Walk",startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:a.duration_seconds,distanceM:Number(a.distance_m)||0,points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
     window.dispatchEvent(new CustomEvent("gativxCloudHistory",{detail:[...records.values()].filter(x=>Number.isFinite(x.startedAt)).sort((a,b)=>b.startedAt-a.startedAt)}));
-    for(const row of dailyActions.data||[]) window.dispatchEvent(new CustomEvent("gativxDailyActionsCloud",{detail:{date:row.action_date,completed:row.completed,updatedAt:row.updated_at}}));
+    const remoteActionDates=new Set();
+    for(const row of dailyActions.data||[]) {
+      remoteActionDates.add(row.action_date);
+      const local=window.__GATIVX_LOCAL_DAILY_ACTIONS__?.[row.action_date];
+      const localUpdated=Date.parse(window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[row.action_date]||"");
+      const remoteUpdated=Date.parse(row.updated_at||"");
+      if(local&&Number.isFinite(localUpdated)&&(!Number.isFinite(remoteUpdated)||localUpdated>remoteUpdated)) enqueue({id:"actions:"+row.action_date,type:"daily_actions",date:row.action_date,completed:local,updatedAt:new Date(localUpdated).toISOString()});
+      else window.dispatchEvent(new CustomEvent("gativxDailyActionsCloud",{detail:{date:row.action_date,completed:row.completed,updatedAt:row.updated_at}}));
+    }
+    for(const [date,completed] of Object.entries(window.__GATIVX_LOCAL_DAILY_ACTIONS__||{})) if(!remoteActionDates.has(date)) enqueue({id:"actions:"+date,type:"daily_actions",date,completed,updatedAt:window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[date]||new Date().toISOString()});
   }
   function subscribe() {
     if(realtime) client.removeChannel(realtime);
