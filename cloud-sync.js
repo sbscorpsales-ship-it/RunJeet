@@ -125,7 +125,7 @@
     const p=profile.data;
     if(p) {
       const local=window.__GATIVX_LOCAL_PROFILE__||{};
-      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goal:p.goal_type||local.goal,cloudUserId:user.id,signedIn:true};
+      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,cloudUserId:user.id,signedIn:true};
       window.__GATIVX_CLOUD_PROFILE__=merged;
       window.dispatchEvent(new CustomEvent("gativxCloudProfile",{detail:merged}));
     }
