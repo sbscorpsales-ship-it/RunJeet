@@ -9,8 +9,10 @@
 <label>YOUR NAME<input id="profileName" type="text" maxlength="60" autocomplete="name" placeholder="Enter your name" required></label>
 <label>PROFILE PHOTO<input id="profilePhoto" type="file" accept="image/*"></label>
 <div class="profile-fields"><label>AGE<input id="profileAge" type="number" min="13" max="110" placeholder="Age"></label><label>HEIGHT (CM)<input id="profileHeight" type="number" min="100" max="250" step="0.1" placeholder="Height"></label><label>WEIGHT (KG)<input id="profileWeight" type="number" min="30" max="250" step="0.1" placeholder="Weight"></label></div>
-<label>YOUR ACHIEVEMENT GOAL<input id="profileGoal" type="text" maxlength="100" placeholder="e.g. Walk 5 km daily"></label>
-<label>YOUR PURPOSE / MISSION<input id="profilePurpose" type="text" maxlength="180" placeholder="Why does this goal matter to you?"></label>
+<label>YOUR GOAL<input id="profileGoal" type="text" maxlength="100" placeholder="What do you want to achieve?"></label>
+<label>YOUR AMBITION / PURPOSE<input id="profilePurpose" type="text" maxlength="180" placeholder="Why does this matter to you?"></label>
+<label>YOUR GOAL JOURNEY<select id="profileGoalDuration"><option value="">Choose your timeframe</option><option value="30 days">30 days</option><option value="90 days">90 days</option><option value="180 days">180 days</option><option value="365 days">365 days</option></select></label>
+<label>HOW DO YOU WANT TO FEEL WHEN YOU ACHIEVE IT?<input id="profileGoalFeeling" type="text" maxlength="180" placeholder="e.g. Strong, confident, energetic"></label>
 <button class="primary-button" type="submit" id="profileSave">SAVE PROFILE ON THIS DEVICE</button>
 </form></details>
 <div class="profile-actions"><button class="text-button" id="signOutBtn" type="button">SIGN OUT ON THIS DEVICE</button></div>
