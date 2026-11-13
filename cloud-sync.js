@@ -71,7 +71,7 @@
   }
   function enqueue(item) {
     const q=queueRead();
-    if(!q.some(x=>x.id===item.id)) q.push(item);
+    const existing=q.findIndex(x=>x.id===item.id); if(existing>=0) q[existing]=item; else q.push(item);
     queueWrite(q);
     if(user) flushQueue().catch(e=>status("Sync queued: "+(e.message||"network unavailable"),true));
   }
@@ -142,6 +142,8 @@
   window.addEventListener("runjeetNativeSteps",onSteps);
   window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
+  window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
+  window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
