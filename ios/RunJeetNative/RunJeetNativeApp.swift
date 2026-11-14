@@ -233,6 +233,7 @@ struct RunJeetWebView: UIViewRepresentable {
             healthStore.execute(query)
         }
 
+        // Read the latest overnight sleep intervals from HealthKit and replay them after WebView startup.
         private func queryHealthSleep(completion: (() -> Void)? = nil) {
             guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { completion?(); return }
             let end = Date()
