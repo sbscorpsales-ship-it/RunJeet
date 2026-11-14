@@ -24,6 +24,10 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.units.Energy
 import org.json.JSONObject
 import androidx.lifecycle.lifecycleScope
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -122,6 +126,35 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface fun clearRoute() { getSharedPreferences(RunJeetLocationService.PREFS, MODE_PRIVATE).edit().putString(RunJeetLocationService.KEY_ROUTE, "[]").apply() }
         @JavascriptInterface fun requestRoute() { runOnUiThread { dispatchStoredRoute() } }
         @JavascriptInterface fun saveWorkout(payload: String) { saveWorkoutToHealthConnect(payload) }
+        @JavascriptInterface fun hasNotificationPermission(): Boolean {
+            return Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        }
+        @JavascriptInterface fun scheduleWellnessReminder(kind: String, enabled: Boolean) {
+            runOnUiThread { scheduleWellnessReminderWork(kind, enabled) }
+        }
+    }
+
+    private fun scheduleWellnessReminderWork(kind: String, enabled: Boolean) {
+        if (kind != "water" && kind != "sedentary") return
+        val workName = "gativx-wellness-$kind"
+        val manager = WorkManager.getInstance(applicationContext)
+        if (!enabled) {
+            manager.cancelUniqueWork(workName)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            RunJeetWebBridge.emit("runjeetNativeReminderStatus", JSONObject()
+                .put("message", "Allow notifications in Android Settings to receive wellness reminders.")
+                .toString())
+            return
+        }
+        val intervalMinutes = if (kind == "water") 60L else 45L
+        val request = PeriodicWorkRequestBuilder<WellnessReminderWorker>(intervalMinutes, java.util.concurrent.TimeUnit.MINUTES)
+            .setInputData(workDataOf("kind" to kind))
+            .build()
+        manager.enqueueUniquePeriodicWork(workName, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     private fun requestLocationAccessAndStart() {
