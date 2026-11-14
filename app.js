@@ -120,7 +120,7 @@ function startWellnessMonitor(){
  if(wellnessTimer)clearInterval(wellnessTimer);
  if(!state.sedentary)state.sedentary={lastMovementAt:Date.now()};
  if(!Number.isFinite(state.sedentary.lastMovementAt))state.sedentary.lastMovementAt=Date.now();
- lastObservedSteps=steps();wellnessTimer=setInterval(checkWellnessReminders,60000);renderWellness();
+ lastObservedSteps=steps();wellnessTimer=setInterval(checkWellnessReminders,60000);const reminders=state.reminderSettings||{};if(reminders.waterEnabled)scheduleNativeWellnessReminder("water",true);if(reminders.sedentaryEnabled)scheduleNativeWellnessReminder("sedentary",true);renderWellness();
 }
 async function addWater(ml){
  const log=todayWellness();log._waterMl=Math.max(0,Number(log._waterMl)||0)+ml;log._lastWaterAt=Date.now();
