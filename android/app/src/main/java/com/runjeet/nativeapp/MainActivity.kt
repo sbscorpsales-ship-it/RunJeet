@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     latestSteps?.let { dispatchSteps(it.first, it.second) } ?: dispatchCachedHardwareSteps()
-                    latestSleepPayload?.let { payload -> view.evaluateJavascript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));", null) }
+                    latestSleepPayload?.let { payload -> view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));", null) }
                     dispatchStoredRoute()
                 }
             }
@@ -303,13 +303,15 @@ class MainActivity : ComponentActivity() {
                     } else if (!interval.first.isAfter(currentEnd)) {
                         if (interval.second.isAfter(currentEnd)) rangeEnd = interval.second
                     } else {
-                        totalSeconds += java.time.Duration.between(rangeStart, currentEnd).seconds
+                        rangeStart?.let { first -> totalSeconds += java.time.Duration.between(first, currentEnd).seconds }
                         rangeStart = interval.first
                         rangeEnd = interval.second
                     }
                 }
-                if (rangeStart != null && rangeEnd != null) {
-                    totalSeconds += java.time.Duration.between(rangeStart, rangeEnd).seconds
+                val finalStart = rangeStart
+                val finalEnd = rangeEnd
+                if (finalStart != null && finalEnd != null) {
+                    totalSeconds += java.time.Duration.between(finalStart, finalEnd).seconds
                 }
                 if (totalSeconds > 0) {
                     val hours = (totalSeconds / 3600.0).coerceIn(0.0, 24.0)
