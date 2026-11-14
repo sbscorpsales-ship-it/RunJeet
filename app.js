@@ -95,11 +95,19 @@ function notifyInApp(message,title){
  if(document.visibilityState==="hidden"&&"Notification"in window&&Notification.permission==="granted"){try{new Notification(title||"GATIVX reminder",{body:message,tag:"gativx-wellness"})}catch{}}
 }
 async function requestReminderPermission(){
+ if(window.webkit?.messageHandlers?.runjeet)return true;
+ if(window.RunJeetAndroid){try{return !!window.RunJeetAndroid.hasNotificationPermission()}catch{return false}}
  if(!("Notification"in window))return false;
  if(Notification.permission==="granted")return true;
  if(Notification.permission==="denied"){toast("Notifications are blocked in browser settings. In-app reminders still work while GATIVX is open.");return false;}
  try{return await Notification.requestPermission()==="granted"}catch{return false}
 }
+function scheduleNativeWellnessReminder(kind,enabled){
+ const value=enabled?"on":"off";
+ if(window.RunJeetAndroid){try{window.RunJeetAndroid.scheduleWellnessReminder(kind,enabled)}catch{toast("Device reminder scheduling could not be started.")}}
+ else if(window.webkit?.messageHandlers?.runjeet){window.webkit.messageHandlers.runjeet.postMessage("wellnessReminder:"+kind+":"+value);}
+}
+window.addEventListener("runjeetNativeReminderStatus",e=>{const message=String(e.detail?.message||"");if(message)toast(message);});
 function checkWellnessReminders(){
  if(!state||document.visibilityState!=="visible")return;
  const cfg=state.reminderSettings||{},now=Date.now(),log=todayWellness();
@@ -127,8 +135,8 @@ function setupWellnessControls(){
  $("sleepForm").addEventListener("submit",async e=>{e.preventDefault();const value=Number($("sleepHours").value);if(!Number.isFinite(value)||value<0||value>24){toast("Enter sleep between 0 and 24 hours.");return;}todayWellness()._sleepHours=value;try{await saveWellness();renderWellness();toast("Sleep entry saved for today.");}catch{toast("Sleep entry could not be saved.");}});
  $("dietMeals").addEventListener("click",async e=>{const b=e.target.closest("[data-meal]");if(!b)return;const log=todayWellness();log._meals=log._meals||{};log._meals[b.dataset.meal]=!log._meals[b.dataset.meal];try{await saveWellness();renderWellness();}catch{toast("Meal progress could not be saved.");}});
  $("sedentaryBreakBtn").addEventListener("click",logMovementBreak);
- $("waterReminderBtn").addEventListener("click",async()=>{state.reminderSettings=state.reminderSettings||{};const cfg=state.reminderSettings;if(cfg.waterEnabled){cfg.waterEnabled=false;}else{if(!await requestReminderPermission())return;cfg.waterEnabled=true;cfg.waterEnabledAt=Date.now();cfg.waterLastReminderAt=Date.now();}try{await save();renderWellness();toast(cfg.waterEnabled?"Water reminders enabled while GATIVX is open.":"Water reminders paused.");}catch{toast("Reminder setting could not be saved.");}});
- $("sedentaryReminderBtn").addEventListener("click",async()=>{state.reminderSettings=state.reminderSettings||{};const cfg=state.reminderSettings;if(cfg.sedentaryEnabled){cfg.sedentaryEnabled=false;}else{if(!await requestReminderPermission())return;cfg.sedentaryEnabled=true;cfg.sedentaryLastReminderAt=Date.now();}try{await save();renderWellness();toast(cfg.sedentaryEnabled?"Movement reminders enabled while GATIVX is open.":"Movement reminders paused.");}catch{toast("Reminder setting could not be saved.");}});
+ $("waterReminderBtn").addEventListener("click",async()=>{state.reminderSettings=state.reminderSettings||{};const cfg=state.reminderSettings;if(cfg.waterEnabled){cfg.waterEnabled=false;}else{if(!await requestReminderPermission())return;cfg.waterEnabled=true;cfg.waterEnabledAt=Date.now();cfg.waterLastReminderAt=Date.now();}try{await save();scheduleNativeWellnessReminder("water",cfg.waterEnabled);renderWellness();toast(cfg.waterEnabled?"Water reminder schedule requested on this device. Delivery depends on notification permission.":"Water reminders paused.");}catch{toast("Reminder setting could not be saved.");}});
+ $("sedentaryReminderBtn").addEventListener("click",async()=>{state.reminderSettings=state.reminderSettings||{};const cfg=state.reminderSettings;if(cfg.sedentaryEnabled){cfg.sedentaryEnabled=false;}else{if(!await requestReminderPermission())return;cfg.sedentaryEnabled=true;cfg.sedentaryLastReminderAt=Date.now();}try{await save();scheduleNativeWellnessReminder("sedentary",cfg.sedentaryEnabled);renderWellness();toast(cfg.sedentaryEnabled?"Movement reminder schedule requested on this device. Delivery depends on notification permission.":"Movement reminders paused.");}catch{toast("Reminder setting could not be saved.");}});
  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkWellnessReminders();});
 }
 function renderDailyActionPlan(){
