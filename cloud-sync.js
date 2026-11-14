@@ -6,7 +6,7 @@
   const URL = "https://crarbbsvcczwmtvxyrxo.supabase.co";
   const KEY = "sb_publishable_XAGRFtrWrFqJ-SfXh2WbRQ_jCcPnr-6";
   const QUEUE_KEY = "gativx-sync-outbox-v1";
-  let client = null, user = null, busy = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null;
+  let client = null, user = null, busy = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null, sessionGeneration = 0;
   const $ = id => document.getElementById(id);
   const day = d => {
     const x = d ? new Date(d) : new Date();
@@ -51,12 +51,14 @@
   async function activate(authUser) {
     if(activeUserId===authUser.id && realtime) return;
     if(activeUserId===authUser.id && activationPromise) return activationPromise;
+    const generation=++sessionGeneration;
     activeUserId=authUser.id;
-    activationPromise=(async()=>{
+    const currentPromise=(async()=>{
     user=authUser; $("gativxCloudSignOut").hidden=false;
     $("gativxCloudHint").textContent="Signed in as "+authUser.email+". Syncing this device with your shared GATIVX account…";
     status("CONNECTED — SYNCING");
     await ensureProfile();
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
     const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
     for(const [date,record] of Object.entries(localSteps)) {
       const count=Number(record?.count);
@@ -75,13 +77,16 @@
       }
     }
     await flushQueue();
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
     if(latestStepEvent) onSteps(latestStepEvent);
     await pullCloud();
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
     subscribe();
     status("CONNECTED — LAST SYNC "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
     })();
-    try { await activationPromise; }
-    finally { activationPromise=null; }
+    activationPromise=currentPromise;
+    try { await currentPromise; }
+    finally { if(activationPromise===currentPromise) activationPromise=null; }
   }
   async function ensureProfile() {
     const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_text,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
@@ -215,7 +220,8 @@
     client=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     client.auth.onAuthStateChange((event,session)=>{
       if(event==="SIGNED_OUT"){
-        user=null; activeUserId=null;
+        sessionGeneration++;
+        user=null; activeUserId=null; activationPromise=null;
         if(realtime){client.removeChannel(realtime);realtime=null;}
         status("Signed out. Local records remain on this device.");
       } else if(session?.user){
