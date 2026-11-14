@@ -52,6 +52,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
+                self.queryHealthSleep()
                 if !self.pedometerActive { self.startPedometer() }
                 self.resumeLocationIfNeeded()
             }
@@ -179,6 +180,7 @@ struct RunJeetWebView: UIViewRepresentable {
             queryHealthSteps()
             queryHealthActivityTotals()
             queryHealthWorkouts()
+            queryHealthSleep()
         }
 
         func requestHealthAccessAndStart() {
@@ -192,12 +194,13 @@ struct RunJeetWebView: UIViewRepresentable {
                   let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
                   let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
                   let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling),
-                  let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) else {
+                  let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime),
+                  let sleepAnalysis = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
                 sendPedometerStatus("HEALTH_UNAVAILABLE", message: "Apple Health is unavailable. iPhone Motion steps can still be recorded.");
                 return
             }
             let workout = HKObjectType.workoutType()
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime]) { [weak self] success, error in
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime, sleepAnalysis]) { [weak self] success, error in
                 guard let self else { return }
                 DispatchQueue.main.async {
                     if let error {
@@ -208,7 +211,7 @@ struct RunJeetWebView: UIViewRepresentable {
                         self.sendPedometerStatus("HEALTH_REQUESTED", message: "Apple Health access request completed. Checking available records; iPhone Motion steps remain active.")
                     }
                 }
-                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime])
+                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime, sleepAnalysis])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
@@ -224,6 +227,50 @@ struct RunJeetWebView: UIViewRepresentable {
                 let total = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
                 self?.sendSteps(Int(total), source: "APPLE HEALTH")
                 completion?()
+            }
+            healthStore.execute(query)
+        }
+
+        private func queryHealthSleep(completion: (() -> Void)? = nil) {
+            guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { completion?(); return }
+            let end = Date()
+            let start = Calendar.current.date(byAdding: .hour, value: -18, to: end) ?? Calendar.current.startOfDay(for: end)
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
+                ]
+                let intervals = (samples as? [HKCategorySample] ?? [])
+                    .filter { asleepValues.contains($0.value) }
+                    .map { ($0.startDate, $0.endDate) }
+                    .sorted { $0.0 < $1.0 }
+                var total: TimeInterval = 0
+                var currentStart: Date?
+                var currentEnd: Date?
+                for interval in intervals {
+                    if let endDate = currentEnd, interval.0 <= endDate {
+                        currentEnd = max(endDate, interval.1)
+                    } else {
+                        if let first = currentStart, let last = currentEnd { total += last.timeIntervalSince(first) }
+                        currentStart = interval.0
+                        currentEnd = interval.1
+                    }
+                }
+                if let first = currentStart, let last = currentEnd { total += last.timeIntervalSince(first) }
+                guard let self, total > 0 else { completion?(); return }
+                let hours = min(24, total / 3600)
+                let payload: [String: Any] = ["hours": hours, "source": "APPLE HEALTH", "date": ISO8601DateFormatter().string(from: Date()).prefix(10).description]
+                guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed]),
+                      let json = String(data: data, encoding: .utf8) else { completion?(); return }
+                DispatchQueue.main.async {
+                    self.webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:\(json)}));", completionHandler: nil)
+                    completion?()
+                }
             }
             healthStore.execute(query)
         }
@@ -359,6 +406,8 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.queryHealthActivityTotals { group.leave() }
                     group.enter()
                     self.queryHealthWorkouts { group.leave() }
+                    group.enter()
+                    self.queryHealthSleep { group.leave() }
                     group.notify(queue: .main) { completion() }
                 }
                 observers.append(query)
