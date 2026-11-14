@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var healthClient: HealthConnectClient? = null
     private var pendingGpsStart = false
+    private var latestSleepPayload: String? = null
     private val writeWorkoutPermissions = setOf(HealthPermission.getWritePermission(ExerciseSessionRecord::class), HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class))
     private val readHealthPermissions = setOf(
         RunJeetStepSource.readStepsPermission,
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     latestSteps?.let { dispatchSteps(it.first, it.second) } ?: dispatchCachedHardwareSteps()
+                    latestSleepPayload?.let { payload -> view.evaluateJavascript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));", null) }
                     dispatchStoredRoute()
                 }
             }
@@ -316,6 +318,7 @@ class MainActivity : ComponentActivity() {
                         .put("source", "HEALTH CONNECT")
                         .put("date", LocalDate.now(ZoneId.systemDefault()).toString())
                     runOnUiThread {
+                        latestSleepPayload = payload.toString()
                         if (::webView.isInitialized) webView.evaluateJavascript(
                             "window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));",
                             null
