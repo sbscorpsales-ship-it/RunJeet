@@ -6,7 +6,7 @@
   const URL = "https://crarbbsvcczwmtvxyrxo.supabase.co";
   const KEY = "sb_publishable_XAGRFtrWrFqJ-SfXh2WbRQ_jCcPnr-6";
   const QUEUE_KEY = "gativx-sync-outbox-v2:";
-  let client = null, user = null, busy = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null, sessionGeneration = 0;
+  let client = null, user = null, busy = false, pendingFlush = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null, sessionGeneration = 0;
   const $ = id => document.getElementById(id);
   const day = d => {
     const x = d ? new Date(d) : new Date();
@@ -121,7 +121,8 @@
     }
   }
   async function flushQueue() {
-    if(!user||busy||!navigator.onLine)return;
+    if(!user||!navigator.onLine)return;
+    if(busy){pendingFlush=true;return;}
     const ownerId=user.id, generation=sessionGeneration;
     busy=true;
     const batch=queueRead();
@@ -154,6 +155,7 @@
       if(changedDuringFlush) queueMicrotask(()=>flushQueue().catch(e=>status("Sync queued: "+(e.message||"retry pending"),true)));
     } finally {
       busy=false;
+      if(pendingFlush){pendingFlush=false;queueMicrotask(()=>flushQueue().catch(e=>status(e.message||'Sync queued',true)));}
     }
   }
   async function pullCloud() {
