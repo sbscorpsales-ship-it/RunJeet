@@ -87,7 +87,7 @@ function renderWellness(){
  $("sleepRing")?.style.setProperty("--wellness-progress",sleepPct*3.6+"deg");$("sleepPercent").textContent=sleepValid?Math.round(sleepPct)+"%":"—";$("sleepValue").textContent=sleepValid?sleep.toFixed(2).replace(/0+$/,"").replace(/\\.$/,"")+" / 8 hours"+(log._sleepSource?" • "+log._sleepSource:""):"Log last night";
  if(document.activeElement!==$("sleepHours"))$("sleepHours").value=sleepValid?sleep:"";
  const done=MEAL_GUIDE.filter(m=>!!meals[m.id]).length;$("dietMeals").innerHTML=MEAL_GUIDE.map(m=>'<button type="button" class="diet-meal '+(meals[m.id]?"is-done":"")+'" data-meal="'+m.id+'" aria-pressed="'+!!meals[m.id]+'"><span class="diet-check">'+(meals[m.id]?"✓":"")+'</span><span><small>'+m.time+'</small><strong>'+m.title+'</strong><em>'+m.detail+'</em></span></button>').join("");$("dietProgress").textContent=done+" of "+MEAL_GUIDE.length+" meal slots checked";
- const cfg=state.reminderSettings||{};$("waterReminderStatus").textContent=cfg.waterEnabled?"Water reminder: every 60 minutes while app is open":"Water reminders are off";$("waterReminderBtn").textContent=cfg.waterEnabled?"TURN OFF REMINDERS":"ENABLE REMINDERS";$("sedentaryReminderBtn").textContent=cfg.sedentaryEnabled?"TURN OFF 45-MIN REMINDERS":"ENABLE 45-MIN REMINDERS";
+ const cfg=state.reminderSettings||{};$("waterReminderStatus").textContent=cfg.waterEnabled?((window.RunJeetAndroid||window.webkit?.messageHandlers?.runjeet)?"Water reminder: every 60 minutes (device scheduled)":"Water reminder: every 60 minutes while app is open"):"Water reminders are off";$("waterReminderBtn").textContent=cfg.waterEnabled?"TURN OFF REMINDERS":"ENABLE REMINDERS";$("sedentaryReminderBtn").textContent=cfg.sedentaryEnabled?"TURN OFF 45-MIN REMINDERS":"ENABLE 45-MIN REMINDERS";
  const since=Math.max(0,Date.now()-(state.sedentary?.lastMovementAt||Date.now())),mins=Math.floor(since/60000);$("sedentaryTime").textContent=mins<60?mins+" min":Math.floor(mins/60)+"h "+mins%60+"m";$("sedentaryState").textContent=mins>=45?"TIME TO MOVE":"ON TRACK";$("sedentaryReport").textContent=mins>=45?"You have been still for around "+mins+" minutes. Stand, stretch or walk gently for 2–5 minutes.": "Last movement detected "+mins+" minutes ago. "+(Number(log._sedentaryBreaks)||0)+" movement breaks logged today.";
 }
 function notifyInApp(message,title){
@@ -96,7 +96,7 @@ function notifyInApp(message,title){
 }
 async function requestReminderPermission(){
  if(window.webkit?.messageHandlers?.runjeet)return true;
- if(window.RunJeetAndroid){try{return !!window.RunJeetAndroid.hasNotificationPermission()}catch{return false}}
+ if(window.RunJeetAndroid){try{const allowed=!!window.RunJeetAndroid.hasNotificationPermission();if(!allowed)toast("Allow notifications in Android Settings to enable background reminders.");return allowed}catch{return false}}
  if(!("Notification"in window))return false;
  if(Notification.permission==="granted")return true;
  if(Notification.permission==="denied"){toast("Notifications are blocked in browser settings. In-app reminders still work while GATIVX is open.");return false;}
