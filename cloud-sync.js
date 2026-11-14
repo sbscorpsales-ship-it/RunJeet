@@ -60,23 +60,7 @@
     status("CONNECTED — SYNCING");
     await ensureProfile(authUser);
     if(generation!==sessionGeneration || user?.id!==authUser.id)return;
-    const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
-    for(const [date,record] of Object.entries(localSteps)) {
-      const count=Number(record?.count);
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isSafeInteger(count)||count<0) continue;
-      const source=String(record.source||"").toLowerCase();
-      const isHealth=source.includes("healthkit")||source.includes("apple health");
-      const isAndroid=source.includes("android")||source.includes("health connect");
-      const rpc=isHealth?"sync_healthkit_daily_steps":(isAndroid?"sync_device_daily_steps":"sync_motion_daily_steps");
-      const args=isHealth?{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString()}:(isAndroid?{p_log_date:date,p_steps:count,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:record.updatedAt||new Date().toISOString()}:{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString(),p_distance_m:null});
-      enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
-    }
-    const localSessions=window.__GATIVX_LOCAL_SESSIONS__||[];
-    for(const activity of localSessions) {
-      if(activity?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activity.id) && Number.isFinite(activity.startedAt) && Number.isFinite(activity.endedAt)) {
-        enqueue({id:"workout:"+activity.id,type:"workout",activity});
-      }
-    }
+    enqueueLocalRecords();
     await flushQueue();
     if(generation!==sessionGeneration || user?.id!==authUser.id)return;
     if(latestStepEvent) onSteps(latestStepEvent);
@@ -105,6 +89,25 @@
     const existing=q.findIndex(x=>x.id===item.id); if(existing>=0) q[existing]=item; else q.push(item);
     queueWrite(q);
     if(user) flushQueue().catch(e=>status("Sync queued: "+(e.message||"network unavailable"),true));
+  }
+  function enqueueLocalRecords() {
+    const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
+    for(const [date,record] of Object.entries(localSteps)) {
+      const count=Number(record?.count);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isSafeInteger(count)||count<0) continue;
+      const source=String(record.source||"").toLowerCase();
+      const isHealth=source.includes("healthkit")||source.includes("apple health");
+      const isAndroid=source.includes("android")||source.includes("health connect");
+      const rpc=isHealth?"sync_healthkit_daily_steps":(isAndroid?"sync_device_daily_steps":"sync_motion_daily_steps");
+      const args=isHealth?{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString()}:(isAndroid?{p_log_date:date,p_steps:count,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:record.updatedAt||new Date().toISOString()}:{p_log_date:date,p_steps:count,p_updated_at:record.updatedAt||new Date().toISOString(),p_distance_m:null});
+      enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
+    }
+    const localSessions=window.__GATIVX_LOCAL_SESSIONS__||[];
+    for(const activity of localSessions) {
+      if(activity?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activity.id) && Number.isFinite(activity.startedAt) && Number.isFinite(activity.endedAt)) {
+        enqueue({id:"workout:"+activity.id,type:"workout",activity});
+      }
+    }
   }
   async function upload(item, ownerId) {
     if(!ownerId || user?.id!==ownerId) throw new Error("Account changed; record retained in its original account queue.");
@@ -217,6 +220,11 @@
     const args=isHealth?{p_log_date:date,p_steps:n,p_updated_at:updatedAt}:(isAndroid?{p_log_date:date,p_steps:n,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:updatedAt}:{p_log_date:date,p_steps:n,p_updated_at:updatedAt,p_distance_m:null});
     enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
   }
+  window.addEventListener("gativxLocalDataReady",()=>{
+    if(!user)return;
+    enqueueLocalRecords();
+    flushQueue().catch(e=>status("Local records queued: "+(e.message||"retry pending"),true));
+  });
   window.addEventListener("runjeetNativeSteps",onSteps);
   window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
