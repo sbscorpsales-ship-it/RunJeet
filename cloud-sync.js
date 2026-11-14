@@ -223,7 +223,7 @@
   window.addEventListener("gativxLocalDataReady",()=>{
     if(!user)return;
     enqueueLocalRecords();
-    flushQueue().catch(e=>status("Local records queued: "+(e.message||"retry pending"),true));
+    flushQueue().then(()=>pullCloud()).catch(e=>status("Local/cloud sync queued: "+(e.message||"retry pending"),true));
   });
   window.addEventListener("runjeetNativeSteps",onSteps);
   window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
