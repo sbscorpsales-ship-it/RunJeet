@@ -108,12 +108,35 @@
   async function flushQueue() {
     if(!user||busy||!navigator.onLine)return;
     busy=true;
+    const batch=queueRead();
+    const originalById=new Map(batch.map(item=>[item.id,JSON.stringify(item)]));
+    const failed=new Set();
     try {
-      let q=queueRead(), remaining=[];
-      for(const item of q) { try { await upload(item); } catch(e) { remaining.push(item); status("Some records are queued: "+(e.message||"retry pending"),true); } }
-      queueWrite(remaining);
-      if(!remaining.length) status("CONNECTED — ALL RECORDS SYNCED");
-    } finally { busy=false; }
+      for(const item of batch) {
+        try {
+          await upload(item);
+        } catch(e) {
+          failed.add(item.id);
+          status("Some records are queued: "+(e.message||"retry pending"),true);
+        }
+      }
+      // Re-read after network requests: never overwrite records enqueued while an upload was in flight.
+      const current=queueRead();
+      const next=current.filter(item=>{
+        const original=originalById.get(item.id);
+        if(original===undefined)return true;
+        if(JSON.stringify(item)!==original)return true;
+        return failed.has(item.id);
+      });
+      queueWrite(next);
+      if(!next.length) status("CONNECTED — ALL RECORDS SYNCED");
+      // Drain only genuinely new/updated records. Failed originals wait for the next
+      // online/foreground retry instead of creating a tight retry loop.
+      const changedDuringFlush=next.some(item=>!originalById.has(item.id)||JSON.stringify(item)!==originalById.get(item.id));
+      if(changedDuringFlush) queueMicrotask(()=>flushQueue().catch(e=>status("Sync queued: "+(e.message||"retry pending"),true)));
+    } finally {
+      busy=false;
+    }
   }
   async function pullCloud() {
     if(!user)return;
