@@ -35,16 +35,14 @@ jobs:
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Verify generated HealthKit entitlement is included in the iOS build settings
+      - name: Verify generated HealthKit entitlement is included in the iOS build
         working-directory: ios
         run: |
           set -euo pipefail
-          grep -q 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements' device-build/Build/Intermediates.noindex/RunJeetNative.build/Release-iphoneos/RunJeetNative.build/RunJeetNative.app.xcent || {
-            echo "HealthKit entitlement missing from generated iOS app entitlements."
-            find device-build -name '*.xcent' -maxdepth 10 -print
-            exit 1
-          }
-          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit' device-build/Build/Intermediates.noindex/RunJeetNative.build/Release-iphoneos/RunJeetNative.build/RunJeetNative.app.xcent | grep -q true
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
+          ENTITLEMENTS="$(find device-build -name '*.xcent' -print -quit)"
+          test -n "$ENTITLEMENTS" || { echo "No generated iOS entitlement payload found."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit' "$ENTITLEMENTS" | grep -q true
           echo "HealthKit entitlement is present in the generated device-build entitlement payload."
       - name: Package full-capability unsigned iPhone IPA
         run: |
