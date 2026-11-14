@@ -19,6 +19,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.units.Energy
 import org.json.JSONObject
@@ -37,7 +38,8 @@ class MainActivity : ComponentActivity() {
         RunJeetStepSource.readStepsPermission,
         HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(ExerciseSessionRecord::class)
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(SleepSessionRecord::class)
     )
 
     private val locationPermissionRequest = registerForActivityResult(
@@ -61,6 +63,9 @@ class MainActivity : ComponentActivity() {
         }
         if (HealthPermission.getReadPermission(ExerciseSessionRecord::class) in granted) {
             readHealthConnectWorkouts()
+        }
+        if (HealthPermission.getReadPermission(SleepSessionRecord::class) in granted) {
+            readHealthConnectSleep()
         }
         requestActivityPermission()
     }
@@ -266,6 +271,63 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun readHealthConnectSleep() {
+        val client = healthClient ?: return
+        lifecycleScope.launch {
+            try {
+                val end = Instant.now()
+                val start = end.minusSeconds(18 * 60 * 60)
+                val response = client.readRecords(
+                    ReadRecordsRequest(
+                        recordType = SleepSessionRecord::class,
+                        timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(start, end),
+                        pageSize = 100
+                    )
+                )
+                val intervals = response.records.flatMap { session ->
+                    val asleepStages = session.stages.filter { it.stage == 2 || it.stage == 4 || it.stage == 5 || it.stage == 6 }
+                    if (asleepStages.isNotEmpty()) asleepStages.map { it.startTime to it.endTime }
+                    else if (session.stages.isEmpty()) listOf(session.startTime to session.endTime)
+                    else emptyList()
+                }.sortedBy { it.first }
+                var totalSeconds = 0L
+                var rangeStart: Instant? = null
+                var rangeEnd: Instant? = null
+                intervals.forEach { interval ->
+                    val currentEnd = rangeEnd
+                    if (currentEnd == null) {
+                        rangeStart = interval.first
+                        rangeEnd = interval.second
+                    } else if (!interval.first.isAfter(currentEnd)) {
+                        if (interval.second.isAfter(currentEnd)) rangeEnd = interval.second
+                    } else {
+                        totalSeconds += java.time.Duration.between(rangeStart, currentEnd).seconds
+                        rangeStart = interval.first
+                        rangeEnd = interval.second
+                    }
+                }
+                if (rangeStart != null && rangeEnd != null) {
+                    totalSeconds += java.time.Duration.between(rangeStart, rangeEnd).seconds
+                }
+                if (totalSeconds > 0) {
+                    val hours = (totalSeconds / 3600.0).coerceIn(0.0, 24.0)
+                    val payload = JSONObject()
+                        .put("hours", hours)
+                        .put("source", "HEALTH CONNECT")
+                        .put("date", LocalDate.now(ZoneId.systemDefault()).toString())
+                    runOnUiThread {
+                        if (::webView.isInitialized) webView.evaluateJavascript(
+                            "window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));",
+                            null
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Sleep permission is optional; manual sleep logging remains available.
+            }
+        }
+    }
+
     private fun readHealthConnectWorkouts() {
         val client = healthClient ?: return
         lifecycleScope.launch {
@@ -416,6 +478,7 @@ class MainActivity : ComponentActivity() {
             readHealthConnectSteps()
             readHealthConnectActivityTotals()
             readHealthConnectWorkouts()
+            readHealthConnectSleep()
             // Re-assert the foreground sensor service when the user returns.
             // START_STICKY also asks Android to recreate it after ordinary process
             // reclamation; this covers cases where the OS did not recreate it.
