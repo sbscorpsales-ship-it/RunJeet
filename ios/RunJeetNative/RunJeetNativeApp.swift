@@ -4,6 +4,7 @@ import WebKit
 import CoreMotion
 import CoreLocation
 import HealthKit
+import UserNotifications
 
 @main
 struct RunJeetNativeApp: App {
@@ -61,6 +62,11 @@ struct RunJeetWebView: UIViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let command = message.body as? String else { return }
             if command.hasPrefix("saveWorkout:") { saveWorkout(command.replacingOccurrences(of: "saveWorkout:", with: "")); return }
+            if command.hasPrefix("wellnessReminder:") {
+                let parts = command.split(separator: ":")
+                if parts.count == 3 { scheduleWellnessReminder(kind: String(parts[1]), enabled: parts[2] == "on") }
+                return
+            }
             if command == "startGPS" {
                 DispatchQueue.main.async {
                     self.wantsLocationUpdates = true
@@ -80,6 +86,46 @@ struct RunJeetWebView: UIViewRepresentable {
                 persistRoute()
             } else if command == "requestRoute" {
                 flushStoredRoute()
+            }
+        }
+
+        private func sendReminderStatus(_ message: String) {
+            guard let data = try? JSONSerialization.data(withJSONObject: ["message": message]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                self.webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeReminderStatus',{detail:\(json)}));", completionHandler: nil)
+            }
+        }
+
+        private func scheduleWellnessReminder(kind: String, enabled: Bool) {
+            guard kind == "water" || kind == "sedentary" else { return }
+            let center = UNUserNotificationCenter.current()
+            let identifier = "gativx.wellness.\(kind)"
+            if !enabled {
+                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                return
+            }
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                guard granted else {
+                    self.sendReminderStatus("Enable notifications in iPhone Settings to receive GATIVX wellness reminders.")
+                    return
+                }
+                let content = UNMutableNotificationContent()
+                if kind == "water" {
+                    content.title = "Hydration check-in"
+                    content.body = "Time for a water check-in. Have a glass if you are thirsty."
+                } else {
+                    content.title = "Movement break"
+                    content.body = "Take a gentle 2–5 minute movement break."
+                }
+                content.sound = .default
+                let interval: TimeInterval = kind == "water" ? 3600 : 2700
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: true)
+                let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+                center.add(request) { error in
+                    if let error { self.sendReminderStatus("GATIVX reminder could not be scheduled: \(error.localizedDescription)") }
+                }
             }
         }
 
