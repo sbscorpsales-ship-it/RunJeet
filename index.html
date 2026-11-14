@@ -23,14 +23,14 @@
  <div class="card-top"><span>HYDRATION & RECOVERY</span><span class="source-tag">DAILY WELLNESS</span></div>
  <div class="wellness-grid">
   <div class="wellness-module"><div class="wellness-ring" id="waterRing"><div><strong id="waterPercent">0%</strong><small>WATER</small></div></div><strong class="wellness-value" id="waterValue">0 / 2,500 ml</strong><small class="muted">Reference target; follow your own fluid guidance.</small><div class="wellness-actions"><button type="button" class="secondary-button" data-water="250">+250 ml</button><button type="button" class="secondary-button" data-water="500">+500 ml</button></div></div>
-  <div class="wellness-module"><div class="wellness-ring sleep-ring" id="sleepRing"><div><strong id="sleepPercent">—</strong><small>SLEEP</small></div></div><strong class="wellness-value" id="sleepValue">Log last night</strong><form id="sleepForm" class="sleep-form"><label for="sleepHours">Hours slept</label><input id="sleepHours" type="number" min="0" max="24" step="0.25" placeholder="e.g. 7.5" required><button type="submit" class="secondary-button">SAVE SLEEP</button></form></div>
+  <div class="wellness-module"><div class="wellness-ring sleep-ring" id="sleepRing"><div><strong id="sleepPercent">—</strong><small>SLEEP</small></div></div><strong class="wellness-value" id="sleepValue">Log last night</strong><small class="muted">Auto-syncs supported HealthKit / Health Connect sleep records; manual entry is available too.</small><form id="sleepForm" class="sleep-form"><label for="sleepHours">Hours slept</label><input id="sleepHours" type="number" min="0" max="24" step="0.25" placeholder="e.g. 7.5" required><button type="submit" class="secondary-button">SAVE SLEEP</button></form></div>
  </div>
  <div class="water-reminder-row"><span id="waterReminderStatus">Water reminders are off</span><button type="button" id="waterReminderBtn" class="text-button">ENABLE REMINDERS</button></div>
 </section>
 <section class="history-card sedentary-card">
  <div class="card-top"><span>SEDENTARY CHECK-IN</span><span id="sedentaryState" class="source-tag">MONITORING</span></div>
  <div class="sedentary-reading"><strong id="sedentaryTime">—</strong><span>since last detected movement</span></div>
- <p id="sedentaryReport">GATIVX will remind you to take a short movement break while the app is open.</p>
+ <p id="sedentaryReport">Movement checks and reminders run while GATIVX is open. Step changes and GPS movement reset the inactivity timer.</p>
  <div class="sedentary-actions"><button type="button" class="secondary-button" id="sedentaryBreakBtn">I TOOK A BREAK</button><button type="button" class="text-button" id="sedentaryReminderBtn">ENABLE 45-MIN REMINDERS</button></div>
 </section>
 <section class="history-card diet-card" id="dailyDietPlan">
