@@ -151,6 +151,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var pedometerActive = false
         private var observers: [HKObserverQuery] = []
         private var pageLoaded = false
+        private var latestSleepPayloadJSON: String?
         private var latestSteps: Int?
         private var latestSource = "IPHONE PEDOMETER"
         private var latestHealthDistance: Double?
@@ -176,6 +177,7 @@ struct RunJeetWebView: UIViewRepresentable {
             flushPedometerStatus()
             flushHealthTotals()
             flushHealthWorkouts()
+            flushNativeSleep()
             flushStoredRoute()
             queryHealthSteps()
             queryHealthActivityTotals()
@@ -268,11 +270,17 @@ struct RunJeetWebView: UIViewRepresentable {
                 guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed]),
                       let json = String(data: data, encoding: .utf8) else { completion?(); return }
                 DispatchQueue.main.async {
-                    self.webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:\(json)}));", completionHandler: nil)
+                    self.latestSleepPayloadJSON = json
+                    self.flushNativeSleep()
                     completion?()
                 }
             }
             healthStore.execute(query)
+        }
+
+        private func flushNativeSleep() {
+            guard pageLoaded, let json = latestSleepPayloadJSON else { return }
+            webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:\(json)}));", completionHandler: nil)
         }
 
         private func queryHealthActivityTotals(completion: (() -> Void)? = nil) {
