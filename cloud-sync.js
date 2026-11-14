@@ -5,15 +5,16 @@
   "use strict";
   const URL = "https://crarbbsvcczwmtvxyrxo.supabase.co";
   const KEY = "sb_publishable_XAGRFtrWrFqJ-SfXh2WbRQ_jCcPnr-6";
-  const QUEUE_KEY = "gativx-sync-outbox-v1";
+  const QUEUE_KEY = "gativx-sync-outbox-v2:";
   let client = null, user = null, busy = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null, sessionGeneration = 0;
   const $ = id => document.getElementById(id);
   const day = d => {
     const x = d ? new Date(d) : new Date();
     return [x.getFullYear(), String(x.getMonth()+1).padStart(2,"0"), String(x.getDate()).padStart(2,"0")].join("-");
   };
-  const queueRead = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); } catch { return []; } };
-  const queueWrite = q => localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-500)));
+  const queueKey = () => user?.id ? QUEUE_KEY + user.id : null;
+  const queueRead = () => { const key=queueKey(); if(!key)return []; try { const q=JSON.parse(localStorage.getItem(key)||"[]"); return Array.isArray(q)?q:[]; } catch { return []; } };
+  const queueWrite = q => { const key=queueKey(); if(key)localStorage.setItem(key, JSON.stringify(q.slice(-500))); };
   const status = (message, error=false) => {
     const node=$("gativxCloudStatus");
     if(node){node.textContent=message;node.dataset.error=error?"true":"false";}
@@ -57,7 +58,7 @@
     user=authUser; $("gativxCloudSignOut").hidden=false;
     $("gativxCloudHint").textContent="Signed in as "+authUser.email+". Syncing this device with your shared GATIVX account…";
     status("CONNECTED — SYNCING");
-    await ensureProfile();
+    await ensureProfile(authUser);
     if(generation!==sessionGeneration || user?.id!==authUser.id)return;
     const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
     for(const [date,record] of Object.entries(localSteps)) {
@@ -88,11 +89,12 @@
     try { await currentPromise; }
     finally { if(activationPromise===currentPromise) activationPromise=null; }
   }
-  async function ensureProfile() {
-    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_text,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
+  async function ensureProfile(authUser=user) {
+    if(!authUser?.id) throw new Error("No authenticated account for profile sync.");
+    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_text,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",authUser.id).maybeSingle();
     if(readError) throw readError;
     const local=window.__GATIVX_LOCAL_PROFILE__||{};
-    const patch={id:user.id,display_name:existing?.display_name||local.name||user.email?.split("@")[0]||"GATIVX Member",
+    const patch={id:authUser.id,display_name:existing?.display_name||local.name||authUser.email?.split("@")[0]||"GATIVX Member",
       goal_purpose:existing?.goal_purpose||local.purpose||null,goal_text:existing?.goal_text||local.goal||null,
       goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,target_weight_kg:existing?.target_weight_kg||75};
     const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
@@ -104,12 +106,13 @@
     queueWrite(q);
     if(user) flushQueue().catch(e=>status("Sync queued: "+(e.message||"network unavailable"),true));
   }
-  async function upload(item) {
+  async function upload(item, ownerId) {
+    if(!ownerId || user?.id!==ownerId) throw new Error("Account changed; record retained in its original account queue.");
     if(item.type==="steps") {
       const {error}=await client.rpc(item.rpc,item.args); if(error) throw error; return;
     }
     if(item.type==="daily_actions") {
-      const {error}=await client.from("daily_action_progress").upsert({user_id:user.id,action_date:item.date,completed:item.completed,updated_at:item.updatedAt||new Date().toISOString()},{onConflict:"user_id,action_date"}); if(error) throw error; return;
+      const {error}=await client.from("daily_action_progress").upsert({user_id:ownerId,action_date:item.date,completed:item.completed,updated_at:item.updatedAt||new Date().toISOString()},{onConflict:"user_id,action_date"}); if(error) throw error; return;
     }
     if(item.type==="workout") {
       const a=item.activity;
@@ -119,6 +122,7 @@
   }
   async function flushQueue() {
     if(!user||busy||!navigator.onLine)return;
+    const ownerId=user.id, generation=sessionGeneration;
     busy=true;
     const batch=queueRead();
     const originalById=new Map(batch.map(item=>[item.id,JSON.stringify(item)]));
@@ -126,13 +130,15 @@
     try {
       for(const item of batch) {
         try {
-          await upload(item);
+          if(generation!==sessionGeneration || user?.id!==ownerId) { failed.add(item.id); continue; }
+          await upload(item,ownerId);
         } catch(e) {
           failed.add(item.id);
           status("Some records are queued: "+(e.message||"retry pending"),true);
         }
       }
       // Re-read after network requests: never overwrite records enqueued while an upload was in flight.
+      if(generation!==sessionGeneration || user?.id!==ownerId)return;
       const current=queueRead();
       const next=current.filter(item=>{
         const original=originalById.get(item.id);
