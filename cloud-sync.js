@@ -158,6 +158,7 @@
   }
   async function pullCloud() {
     if(!user)return;
+    const ownerId=user.id, generation=sessionGeneration;
     const [profile,steps,motion,activities,walks,dailyActions]=await Promise.all([
       client.from("profiles").select("*").eq("id",user.id).maybeSingle(),
       client.from("daily_logs").select("log_date,steps,steps_source,active_energy_kcal").eq("user_id",user.id).order("log_date",{ascending:false}).limit(90),
@@ -166,6 +167,7 @@
       client.from("walk_sessions").select("id,started_at,finished_at,duration_seconds,distance_m,steps,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100),
       client.from("daily_action_progress").select("action_date,completed,updated_at").eq("user_id",user.id).order("action_date",{ascending:false}).limit(90)
     ]);
+    if(generation!==sessionGeneration || user?.id!==ownerId)return;
     for(const r of [profile,steps,motion,activities,walks,dailyActions]) if(r.error) throw r.error;
     const p=profile.data;
     if(p) {
