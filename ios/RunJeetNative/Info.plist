@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>NSHealthShareUsageDescription</key><string>GATIVX reads your daily step totals from Apple Health to show accurate activity even when the app is closed.</string>
+<key>NSHealthShareUsageDescription</key><string>GATIVX reads your steps, sleep, workouts and activity totals from Apple Health to show your health dashboard.</string>
 <key>NSHealthUpdateUsageDescription</key><string>GATIVX may save workouts you choose to record.</string>
 <key>NSLocationWhenInUseUsageDescription</key><string>GATIVX records your route and distance during activities you start.</string>
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>GATIVX continues recording an activity you started when your iPhone screen is locked.</string>
