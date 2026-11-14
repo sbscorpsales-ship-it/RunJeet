@@ -1,7 +1,7 @@
 {
-  "name": "RunJeet",
-  "short_name": "RunJeet",
-  "description": "Simple steps, GPS activity and a live dashboard.",
+  "name": "GATIVX",
+  "short_name": "GATIVX",
+  "description": "Your fitness and goal-achievement companion.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

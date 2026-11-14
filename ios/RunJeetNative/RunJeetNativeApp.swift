@@ -4,6 +4,7 @@ import WebKit
 import CoreMotion
 import CoreLocation
 import HealthKit
+import UserNotifications
 
 @main
 struct RunJeetNativeApp: App {
@@ -52,6 +53,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
+                self.queryHealthSleep()
                 if !self.pedometerActive { self.startPedometer() }
                 self.resumeLocationIfNeeded()
             }
@@ -60,6 +62,11 @@ struct RunJeetWebView: UIViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let command = message.body as? String else { return }
             if command.hasPrefix("saveWorkout:") { saveWorkout(command.replacingOccurrences(of: "saveWorkout:", with: "")); return }
+            if command.hasPrefix("wellnessReminder:") {
+                let parts = command.split(separator: ":")
+                if parts.count == 3 { scheduleWellnessReminder(kind: String(parts[1]), enabled: parts[2] == "on") }
+                return
+            }
             if command == "startGPS" {
                 DispatchQueue.main.async {
                     self.wantsLocationUpdates = true
@@ -79,6 +86,46 @@ struct RunJeetWebView: UIViewRepresentable {
                 persistRoute()
             } else if command == "requestRoute" {
                 flushStoredRoute()
+            }
+        }
+
+        private func sendReminderStatus(_ message: String) {
+            guard let data = try? JSONSerialization.data(withJSONObject: ["message": message]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                self.webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeReminderStatus',{detail:\(json)}));", completionHandler: nil)
+            }
+        }
+
+        private func scheduleWellnessReminder(kind: String, enabled: Bool) {
+            guard kind == "water" || kind == "sedentary" else { return }
+            let center = UNUserNotificationCenter.current()
+            let identifier = "gativx.wellness.\(kind)"
+            if !enabled {
+                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                return
+            }
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                guard granted else {
+                    self.sendReminderStatus("Enable notifications in iPhone Settings to receive GATIVX wellness reminders.")
+                    return
+                }
+                let content = UNMutableNotificationContent()
+                if kind == "water" {
+                    content.title = "Hydration check-in"
+                    content.body = "Time for a water check-in. Have a glass if you are thirsty."
+                } else {
+                    content.title = "Movement break"
+                    content.body = "Take a gentle 2–5 minute movement break."
+                }
+                content.sound = .default
+                let interval: TimeInterval = kind == "water" ? 3600 : 2700
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: true)
+                let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+                center.add(request) { error in
+                    if let error { self.sendReminderStatus("GATIVX reminder could not be scheduled: \(error.localizedDescription)") }
+                }
             }
         }
 
@@ -118,7 +165,7 @@ struct RunJeetWebView: UIViewRepresentable {
             // route buffer alive; the next valid fix will continue the same session.
             let message: String
             if code == .locationUnknown {
-                message = "GPS signal temporarily unavailable. RunJeet is keeping your activity open and waiting for a new fix."
+                message = "GPS signal temporarily unavailable. GATIVX is keeping your activity open and waiting for a new fix."
             } else if code == .denied {
                 message = "Location access is off. Enable location permission to continue GPS recording. Your saved route is retained."
             } else {
@@ -150,6 +197,7 @@ struct RunJeetWebView: UIViewRepresentable {
         private var pedometerActive = false
         private var observers: [HKObserverQuery] = []
         private var pageLoaded = false
+        private var latestSleepPayloadJSON: String?
         private var latestSteps: Int?
         private var latestSource = "IPHONE PEDOMETER"
         private var latestHealthDistance: Double?
@@ -175,10 +223,12 @@ struct RunJeetWebView: UIViewRepresentable {
             flushPedometerStatus()
             flushHealthTotals()
             flushHealthWorkouts()
+            flushNativeSleep()
             flushStoredRoute()
             queryHealthSteps()
             queryHealthActivityTotals()
             queryHealthWorkouts()
+            queryHealthSleep()
         }
 
         func requestHealthAccessAndStart() {
@@ -192,12 +242,13 @@ struct RunJeetWebView: UIViewRepresentable {
                   let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
                   let walkRunDistance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
                   let cycleDistance = HKObjectType.quantityType(forIdentifier: .distanceCycling),
-                  let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) else {
+                  let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime),
+                  let sleepAnalysis = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
                 sendPedometerStatus("HEALTH_UNAVAILABLE", message: "Apple Health is unavailable. iPhone Motion steps can still be recorded.");
                 return
             }
             let workout = HKObjectType.workoutType()
-            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime]) { [weak self] success, error in
+            healthStore.requestAuthorization(toShare: [workout, energy], read: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime, sleepAnalysis]) { [weak self] success, error in
                 guard let self else { return }
                 DispatchQueue.main.async {
                     if let error {
@@ -208,7 +259,7 @@ struct RunJeetWebView: UIViewRepresentable {
                         self.sendPedometerStatus("HEALTH_REQUESTED", message: "Apple Health access request completed. Checking available records; iPhone Motion steps remain active.")
                     }
                 }
-                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime])
+                self.installHealthObservers(for: [workout, steps, energy, walkRunDistance, cycleDistance, exerciseTime, sleepAnalysis])
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
@@ -226,6 +277,57 @@ struct RunJeetWebView: UIViewRepresentable {
                 completion?()
             }
             healthStore.execute(query)
+        }
+
+        // Read the latest overnight sleep intervals from HealthKit and replay them after WebView startup.
+        private func queryHealthSleep(completion: (() -> Void)? = nil) {
+            guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { completion?(); return }
+            let end = Date()
+            let start = Calendar.current.date(byAdding: .hour, value: -18, to: end) ?? Calendar.current.startOfDay(for: end)
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
+                ]
+                let intervals = (samples as? [HKCategorySample] ?? [])
+                    .filter { asleepValues.contains($0.value) }
+                    .map { ($0.startDate, $0.endDate) }
+                    .sorted { $0.0 < $1.0 }
+                var total: TimeInterval = 0
+                var currentStart: Date?
+                var currentEnd: Date?
+                for interval in intervals {
+                    if let endDate = currentEnd, interval.0 <= endDate {
+                        currentEnd = max(endDate, interval.1)
+                    } else {
+                        if let first = currentStart, let last = currentEnd { total += last.timeIntervalSince(first) }
+                        currentStart = interval.0
+                        currentEnd = interval.1
+                    }
+                }
+                if let first = currentStart, let last = currentEnd { total += last.timeIntervalSince(first) }
+                guard let self, total > 0 else { completion?(); return }
+                let hours = min(24, total / 3600)
+                let payload: [String: Any] = ["hours": hours, "source": "APPLE HEALTH", "date": ISO8601DateFormatter().string(from: Date()).prefix(10).description]
+                guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed]),
+                      let json = String(data: data, encoding: .utf8) else { completion?(); return }
+                DispatchQueue.main.async {
+                    self.latestSleepPayloadJSON = json
+                    self.flushNativeSleep()
+                    completion?()
+                }
+            }
+            healthStore.execute(query)
+        }
+
+        private func flushNativeSleep() {
+            guard pageLoaded, let json = latestSleepPayloadJSON else { return }
+            webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:\(json)}));", completionHandler: nil)
         }
 
         private func queryHealthActivityTotals(completion: (() -> Void)? = nil) {
@@ -359,6 +461,8 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.queryHealthActivityTotals { group.leave() }
                     group.enter()
                     self.queryHealthWorkouts { group.leave() }
+                    group.enter()
+                    self.queryHealthSleep { group.leave() }
                     group.notify(queue: .main) { completion() }
                 }
                 observers.append(query)
@@ -389,7 +493,7 @@ struct RunJeetWebView: UIViewRepresentable {
             guard !pedometerActive else { return }
             switch CMPedometer.authorizationStatus() {
             case .denied, .restricted:
-                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
+                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for GATIVX in iPhone Settings.")
                 return
             default:
                 break
@@ -446,11 +550,11 @@ struct RunJeetWebView: UIViewRepresentable {
                   let startMs = object["startTime"] as? Double,
                   let endMs = object["endTime"] as? Double,
                   endMs > startMs else {
-                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your GATIVX activity remains saved locally.")
                 return
             }
             guard HKHealthStore.isHealthDataAvailable() else {
-                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your GATIVX activity remains saved locally.")
                 return
             }
             let start = Date(timeIntervalSince1970: startMs / 1000)
@@ -475,7 +579,7 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
                 } else {
                     let reason = error?.localizedDescription ?? "permission not granted"
-                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your RunJeet activity remains saved locally.")
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your GATIVX activity remains saved locally.")
                 }
             }
         }

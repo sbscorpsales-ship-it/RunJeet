@@ -5,15 +5,16 @@
   "use strict";
   const URL = "https://crarbbsvcczwmtvxyrxo.supabase.co";
   const KEY = "sb_publishable_XAGRFtrWrFqJ-SfXh2WbRQ_jCcPnr-6";
-  const QUEUE_KEY = "gativx-sync-outbox-v1";
-  let client = null, user = null, busy = false, realtime = null, latestStepEvent = null;
+  const QUEUE_KEY = "gativx-sync-outbox-v2:";
+  let client = null, user = null, busy = false, pendingFlush = false, realtime = null, latestStepEvent = null, activeUserId = null, activationPromise = null, sessionGeneration = 0;
   const $ = id => document.getElementById(id);
   const day = d => {
     const x = d ? new Date(d) : new Date();
     return [x.getFullYear(), String(x.getMonth()+1).padStart(2,"0"), String(x.getDate()).padStart(2,"0")].join("-");
   };
-  const queueRead = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); } catch { return []; } };
-  const queueWrite = q => localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-500)));
+  const queueKey = () => user?.id ? QUEUE_KEY + user.id : null;
+  const queueRead = () => { const key=queueKey(); if(!key)return []; try { const q=JSON.parse(localStorage.getItem(key)||"[]"); return Array.isArray(q)?q:[]; } catch { return []; } };
+  const queueWrite = q => { const key=queueKey(); if(key)localStorage.setItem(key, JSON.stringify(q.slice(-500))); };
   const status = (message, error=false) => {
     const node=$("gativxCloudStatus");
     if(node){node.textContent=message;node.dataset.error=error?"true":"false";}
@@ -49,10 +50,47 @@
     $("gativxCloudSignOut").addEventListener("click",async()=>{const {error}=await client.auth.signOut();if(error)status(error.message,true);else{user=null;status("Signed out. Local device records are retained.");$("gativxCloudSignOut").hidden=true;$("gativxCloudHint").textContent="Sign in with the same account on your iPhone, Android and Safari to share your fitness history.";}});
   }
   async function activate(authUser) {
+    if(activeUserId===authUser.id && realtime) return;
+    if(activeUserId===authUser.id && activationPromise) return activationPromise;
+    const generation=++sessionGeneration;
+    activeUserId=authUser.id;
+    const currentPromise=(async()=>{
     user=authUser; $("gativxCloudSignOut").hidden=false;
     $("gativxCloudHint").textContent="Signed in as "+authUser.email+". Syncing this device with your shared GATIVX account…";
     status("CONNECTED — SYNCING");
-    await ensureProfile();
+    await ensureProfile(authUser);
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
+    enqueueLocalRecords();
+    await flushQueue();
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
+    if(latestStepEvent) onSteps(latestStepEvent);
+    await pullCloud();
+    if(generation!==sessionGeneration || user?.id!==authUser.id)return;
+    subscribe();
+    status("CONNECTED — LAST SYNC "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
+    })();
+    activationPromise=currentPromise;
+    try { await currentPromise; }
+    finally { if(activationPromise===currentPromise) activationPromise=null; }
+  }
+  async function ensureProfile(authUser=user) {
+    if(!authUser?.id) throw new Error("No authenticated account for profile sync.");
+    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_text,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",authUser.id).maybeSingle();
+    if(readError) throw readError;
+    const local=window.__GATIVX_LOCAL_PROFILE__||{};
+    const patch={id:authUser.id,display_name:existing?.display_name||local.name||authUser.email?.split("@")[0]||"GATIVX Member",
+      goal_purpose:existing?.goal_purpose||local.purpose||null,goal_text:existing?.goal_text||local.goal||null,
+      goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,target_weight_kg:existing?.target_weight_kg||75};
+    const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
+    if(error) throw error;
+  }
+  function enqueue(item) {
+    const q=queueRead();
+    const existing=q.findIndex(x=>x.id===item.id); if(existing>=0) q[existing]=item; else q.push(item);
+    queueWrite(q);
+    if(user) flushQueue().catch(e=>status("Sync queued: "+(e.message||"network unavailable"),true));
+  }
+  function enqueueLocalRecords() {
     const localSteps=window.__GATIVX_LOCAL_STEPS__||{};
     for(const [date,record] of Object.entries(localSteps)) {
       const count=Number(record?.count);
@@ -70,31 +108,14 @@
         enqueue({id:"workout:"+activity.id,type:"workout",activity});
       }
     }
-    await flushQueue();
-    if(latestStepEvent) onSteps(latestStepEvent);
-    await pullCloud();
-    subscribe();
-    status("CONNECTED — LAST SYNC "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
   }
-  async function ensureProfile() {
-    const {data:existing,error:readError}=await client.from("profiles").select("id,display_name,goal_type,goal_duration,goal_purpose,goal_feeling,target_weight_kg,starting_weight_kg").eq("id",user.id).maybeSingle();
-    if(readError) throw readError;
-    const local=window.__GATIVX_LOCAL_PROFILE__||{};
-    const patch={id:user.id,display_name:existing?.display_name||local.name||user.email?.split("@")[0]||"GATIVX Member",
-      goal_purpose:existing?.goal_purpose||local.purpose||null,
-      goal_type:existing?.goal_type||"fitness",target_weight_kg:existing?.target_weight_kg||75};
-    const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
-    if(error) throw error;
-  }
-  function enqueue(item) {
-    const q=queueRead();
-    const existing=q.findIndex(x=>x.id===item.id); if(existing>=0) q[existing]=item; else q.push(item);
-    queueWrite(q);
-    if(user) flushQueue().catch(e=>status("Sync queued: "+(e.message||"network unavailable"),true));
-  }
-  async function upload(item) {
+  async function upload(item, ownerId) {
+    if(!ownerId || user?.id!==ownerId) throw new Error("Account changed; record retained in its original account queue.");
     if(item.type==="steps") {
       const {error}=await client.rpc(item.rpc,item.args); if(error) throw error; return;
+    }
+    if(item.type==="daily_actions") {
+      const {error}=await client.from("daily_action_progress").upsert({user_id:ownerId,action_date:item.date,completed:item.completed,updated_at:item.updatedAt||new Date().toISOString()},{onConflict:"user_id,action_date"}); if(error) throw error; return;
     }
     if(item.type==="workout") {
       const a=item.activity;
@@ -103,29 +124,60 @@
     }
   }
   async function flushQueue() {
-    if(!user||busy||!navigator.onLine)return;
+    if(!user||!navigator.onLine)return;
+    if(busy){pendingFlush=true;return;}
+    const ownerId=user.id, generation=sessionGeneration;
     busy=true;
+    const batch=queueRead();
+    const originalById=new Map(batch.map(item=>[item.id,JSON.stringify(item)]));
+    const failed=new Set();
     try {
-      let q=queueRead(), remaining=[];
-      for(const item of q) { try { await upload(item); } catch(e) { remaining.push(item); status("Some records are queued: "+(e.message||"retry pending"),true); } }
-      queueWrite(remaining);
-      if(!remaining.length) status("CONNECTED — ALL RECORDS SYNCED");
-    } finally { busy=false; }
+      for(const item of batch) {
+        try {
+          if(generation!==sessionGeneration || user?.id!==ownerId) { failed.add(item.id); continue; }
+          await upload(item,ownerId);
+        } catch(e) {
+          failed.add(item.id);
+          status("Some records are queued: "+(e.message||"retry pending"),true);
+        }
+      }
+      // Re-read after network requests: never overwrite records enqueued while an upload was in flight.
+      if(generation!==sessionGeneration || user?.id!==ownerId)return;
+      const current=queueRead();
+      const next=current.filter(item=>{
+        const original=originalById.get(item.id);
+        if(original===undefined)return true;
+        if(JSON.stringify(item)!==original)return true;
+        return failed.has(item.id);
+      });
+      queueWrite(next);
+      if(!next.length) status("CONNECTED — ALL RECORDS SYNCED");
+      // Drain only genuinely new/updated records. Failed originals wait for the next
+      // online/foreground retry instead of creating a tight retry loop.
+      const changedDuringFlush=next.some(item=>!originalById.has(item.id)||JSON.stringify(item)!==originalById.get(item.id));
+      if(changedDuringFlush) queueMicrotask(()=>flushQueue().catch(e=>status("Sync queued: "+(e.message||"retry pending"),true)));
+    } finally {
+      busy=false;
+      if(pendingFlush){pendingFlush=false;queueMicrotask(()=>flushQueue().catch(e=>status(e.message||'Sync queued',true)));}
+    }
   }
   async function pullCloud() {
     if(!user)return;
-    const [profile,steps,motion,activities,walks]=await Promise.all([
+    const ownerId=user.id, generation=sessionGeneration;
+    const [profile,steps,motion,activities,walks,dailyActions]=await Promise.all([
       client.from("profiles").select("*").eq("id",user.id).maybeSingle(),
       client.from("daily_logs").select("log_date,steps,steps_source,active_energy_kcal").eq("user_id",user.id).order("log_date",{ascending:false}).limit(90),
       client.from("motion_daily_steps").select("log_date,steps,source,measured_at").eq("user_id",user.id).order("log_date",{ascending:false}).limit(90),
       client.from("activity_sessions").select("session_id,activity,started_at,finished_at,steps,source,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100),
-      client.from("walk_sessions").select("id,started_at,finished_at,duration_seconds,distance_m,steps,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100)
+      client.from("walk_sessions").select("id,started_at,finished_at,duration_seconds,distance_m,steps,route_points").eq("user_id",user.id).order("started_at",{ascending:false}).limit(100),
+      client.from("daily_action_progress").select("action_date,completed,updated_at").eq("user_id",user.id).order("action_date",{ascending:false}).limit(90)
     ]);
-    for(const r of [profile,steps,motion,activities,walks]) if(r.error) throw r.error;
+    if(generation!==sessionGeneration || user?.id!==ownerId)return;
+    for(const r of [profile,steps,motion,activities,walks,dailyActions]) if(r.error) throw r.error;
     const p=profile.data;
     if(p) {
       const local=window.__GATIVX_LOCAL_PROFILE__||{};
-      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goal:p.goal_type||local.goal,cloudUserId:user.id,signedIn:true};
+      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goal:p.goal_text||local.goal,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,cloudUserId:user.id,signedIn:true};
       window.__GATIVX_CLOUD_PROFILE__=merged;
       window.dispatchEvent(new CustomEvent("gativxCloudProfile",{detail:merged}));
     }
@@ -136,6 +188,16 @@
     for(const a of activities.data||[]) records.set(a.session_id,{id:a.session_id,activityType:a.activity,startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:Math.max(0,(Date.parse(a.finished_at)-Date.parse(a.started_at))/1000),points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
     for(const a of walks.data||[]) records.set(a.id,{id:a.id,activityType:"Walk",startedAt:Date.parse(a.started_at),endedAt:Date.parse(a.finished_at),durationSec:a.duration_seconds,distanceM:Number(a.distance_m)||0,points:Array.isArray(a.route_points)?a.route_points:[],recordSource:"CLOUD"});
     window.dispatchEvent(new CustomEvent("gativxCloudHistory",{detail:[...records.values()].filter(x=>Number.isFinite(x.startedAt)).sort((a,b)=>b.startedAt-a.startedAt)}));
+    const remoteActionDates=new Set();
+    for(const row of dailyActions.data||[]) {
+      remoteActionDates.add(row.action_date);
+      const local=window.__GATIVX_LOCAL_DAILY_ACTIONS__?.[row.action_date];
+      const localUpdated=Date.parse(window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[row.action_date]||"");
+      const remoteUpdated=Date.parse(row.updated_at||"");
+      if(local&&Number.isFinite(localUpdated)&&(!Number.isFinite(remoteUpdated)||localUpdated>remoteUpdated)) enqueue({id:"actions:"+row.action_date,type:"daily_actions",date:row.action_date,completed:local,updatedAt:new Date(localUpdated).toISOString()});
+      else window.dispatchEvent(new CustomEvent("gativxDailyActionsCloud",{detail:{date:row.action_date,completed:row.completed,updatedAt:row.updated_at}}));
+    }
+    for(const [date,completed] of Object.entries(window.__GATIVX_LOCAL_DAILY_ACTIONS__||{})) if(!remoteActionDates.has(date)) enqueue({id:"actions:"+date,type:"daily_actions",date,completed,updatedAt:window.__GATIVX_LOCAL_DAILY_ACTIONS_UPDATED_AT__?.[date]||new Date().toISOString()});
   }
   function subscribe() {
     if(realtime) client.removeChannel(realtime);
@@ -144,6 +206,7 @@
       .on("postgres_changes",{event:"*",schema:"public",table:"motion_daily_steps",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"activity_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .on("postgres_changes",{event:"*",schema:"public",table:"walk_sessions",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
+      .on("postgres_changes",{event:"*",schema:"public",table:"daily_action_progress",filter:"user_id=eq."+user.id},()=>pullCloud().catch(e=>status(e.message,true)))
       .subscribe();
   }
   function onSteps(e) {
@@ -157,17 +220,33 @@
     const args=isHealth?{p_log_date:date,p_steps:n,p_updated_at:updatedAt}:(isAndroid?{p_log_date:date,p_steps:n,p_source:source.includes("health connect")?"health_connect":"android_hardware_pedometer",p_updated_at:updatedAt}:{p_log_date:date,p_steps:n,p_updated_at:updatedAt,p_distance_m:null});
     enqueue({id:"steps:"+date+":"+source,type:"steps",rpc,args});
   }
+  window.addEventListener("gativxLocalDataReady",()=>{
+    if(!user)return;
+    enqueueLocalRecords();
+    flushQueue().then(()=>pullCloud()).catch(e=>status("Local/cloud sync queued: "+(e.message||"retry pending"),true));
+  });
   window.addEventListener("runjeetNativeSteps",onSteps);
   window.addEventListener("runjeetActivitySaved",e=>{const a=e.detail;if(!a||!a.id)return;enqueue({id:"workout:"+a.id,type:"workout",activity:a});});
   window.addEventListener("online",()=>flushQueue().catch(()=>{}));
   window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
-  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_purpose:p.purpose||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
+  window.addEventListener("gativxDailyActionsChanged",e=>{if(!user)return;const d=e.detail||{};if(d.source==="cloud"||!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||!d.completed||typeof d.completed!=="object")return;enqueue({id:"actions:"+d.date,type:"daily_actions",date:d.date,completed:d.completed,updatedAt:d.updatedAt||new Date().toISOString()});});
+  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
     if(!window.supabase?.createClient){status("Cloud library did not load. Refresh while connected.",true);return;}
     client=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-    client.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"){user=null;status("Signed out. Local records remain on this device.");}else if(session?.user){user=session.user;setTimeout(()=>activate(session.user).catch(e=>status(e.message||"Cloud sync failed",true)),0);}});
+    client.auth.onAuthStateChange((event,session)=>{
+      if(event==="SIGNED_OUT"){
+        sessionGeneration++;
+        user=null; activeUserId=null; activationPromise=null;
+        if(realtime){client.removeChannel(realtime);realtime=null;}
+        status("Signed out. Local records remain on this device.");
+      } else if(session?.user){
+        user=session.user;
+        setTimeout(()=>activate(session.user).catch(e=>status(e.message||"Cloud sync failed",true)),0);
+      }
+    });
     const {data,error}=await client.auth.getSession();
     if(error) throw error;
     if(data.session?.user) await activate(data.session.user);

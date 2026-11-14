@@ -10,6 +10,11 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-native.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-native.yml'
   workflow_dispatch:
 jobs:
   build:
@@ -30,34 +35,28 @@ jobs:
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Verify generated HealthKit entitlement is included in the iOS build
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
+          ENTITLEMENTS="$(find device-build -name '*.xcent' -print -quit)"
+          test -n "$ENTITLEMENTS" || { echo "No generated iOS entitlement payload found."; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit' "$ENTITLEMENTS" | grep -q true
+          echo "HealthKit entitlement is present in the generated device-build entitlement payload."
       - name: Package full-capability unsigned iPhone IPA
         run: |
           mkdir -p ios/ipa/Payload
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
-          /usr/bin/zip -qry RunJeet-unsigned.ipa Payload
+          /usr/bin/zip -qry GATIVX-unsigned.ipa Payload
       - name: Upload full-capability iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-unsigned-ipa
-          path: ios/ipa/RunJeet-unsigned.ipa
-      - name: Compile iPhone free-sideload build without restricted HealthKit entitlements
-        working-directory: ios
-        run: |
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath free-device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= build
-      - name: Package Core Motion free-sideload IPA
-        run: |
-          mkdir -p ios/free-ipa/Payload
-          cp -R ios/free-device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/free-ipa/Payload/
-          cd ios/free-ipa
-          /usr/bin/zip -qry RunJeet-CoreMotion-free-sideload.ipa Payload
-      - name: Upload Core Motion free-sideload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: runjeet-iphone-free-sideload-coremotion
-          path: ios/free-ipa/RunJeet-CoreMotion-free-sideload.ipa
+          name: gativx-iphone-unsigned-ipa
+          path: ios/ipa/GATIVX-unsigned.ipa
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-ios-simulator-build
+          name: gativx-ios-simulator-build
           path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app

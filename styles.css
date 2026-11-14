@@ -31,3 +31,31 @@
  .progress-ring strong{font-size:15px}
  .ring-wrap>span{font-size:9px}
 }
+
+.action-intro{font-size:11px;color:var(--muted);line-height:1.55;margin:12px 0}.action-list{display:grid;gap:9px;margin-top:12px}.action-item{display:flex;align-items:flex-start;gap:11px;width:100%;padding:12px;text-align:left;background:#151910;border:1px solid #343a29;border-radius:12px;color:var(--text);cursor:pointer;font:inherit}.action-item.is-done{border-color:#d9ff4370;background:#d9ff430c}.action-check{display:grid;place-items:center;flex:0 0 22px;height:22px;border:1px solid #747d5e;border-radius:7px;color:#171a0e;font-weight:800}.action-item.is-done .action-check{background:var(--lime);border-color:var(--lime)}.action-item strong{display:block;font-size:12px}.action-item small{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.5}.action-item.is-done strong{text-decoration:line-through;color:var(--muted)}
+
+/* GATIVX wellness, recovery and nutrition modules */
+.wellness-card,.sedentary-card,.diet-card{background:linear-gradient(145deg,#202419,#191c15);border:1px solid var(--line);border-radius:19px;padding:18px;margin:0 0 13px}
+.wellness-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:18px 0 12px}
+.wellness-module{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0}
+.wellness-ring{--wellness-progress:0deg;width:88px;height:88px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(#68c7ff var(--wellness-progress),#39402b 0deg)}
+.wellness-ring:before{content:"";position:absolute;inset:8px;border-radius:50%;background:#1b1e16}
+.wellness-ring>div{position:relative;text-align:center}
+.wellness-ring strong{display:block;font-size:19px;font-variant-numeric:tabular-nums}
+.wellness-ring small{font:8px 'DM Mono',monospace;color:var(--muted)}
+.sleep-ring{background:conic-gradient(#c59aff var(--wellness-progress),#39402b 0deg)}
+.wellness-value{font:10px 'DM Mono',monospace;color:var(--text);text-align:center}
+.wellness-actions{display:flex;gap:6px;width:100%}.wellness-actions button{padding:9px 5px;font-size:9px}
+.sleep-form{width:100%;display:grid;gap:6px}.sleep-form label{font:9px 'DM Mono',monospace;color:var(--muted);text-align:center}
+.sleep-form input{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#11130d;color:var(--text);padding:10px;text-align:center;font:14px Manrope,system-ui,sans-serif}
+.sleep-form button{width:100%;padding:9px 5px;font-size:9px}
+.water-reminder-row,.sedentary-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #ffffff12;padding-top:10px;font-size:10px;color:var(--muted)}
+.sedentary-reading{display:flex;align-items:baseline;gap:10px;margin:15px 0 5px}.sedentary-reading strong{font-size:31px;font-variant-numeric:tabular-nums}.sedentary-reading span,.sedentary-card p{font-size:10px;color:var(--muted)}
+.sedentary-card p{line-height:1.5}.sedentary-actions .secondary-button{flex:0 1 auto}
+.diet-meals{display:grid;gap:8px;margin:12px 0}
+.diet-meal{display:flex;gap:10px;align-items:flex-start;width:100%;padding:11px;text-align:left;border:1px solid #343a29;border-radius:11px;background:#151910;color:var(--text);cursor:pointer;font:inherit}
+.diet-meal.is-done{border-color:#d9ff4370;background:#d9ff430c}
+.diet-check{display:grid;place-items:center;flex:0 0 21px;height:21px;border:1px solid #747d5e;border-radius:6px;color:#171a0e;font-size:12px;font-weight:800}
+.diet-meal.is-done .diet-check{background:var(--lime);border-color:var(--lime)}
+.diet-meal small,.diet-meal strong,.diet-meal em{display:block}.diet-meal small{font:8px 'DM Mono',monospace;color:var(--lime);letter-spacing:.8px}.diet-meal strong{font-size:11px;margin:3px 0}.diet-meal em{font-style:normal;color:var(--muted);font-size:10px;line-height:1.45}
+@media(max-width:360px){.wellness-grid{gap:8px}.water-reminder-row,.sedentary-actions{align-items:flex-start;flex-direction:column}}
