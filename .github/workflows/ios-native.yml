@@ -10,6 +10,11 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-native.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-native.yml'
   workflow_dispatch:
 jobs:
   build:
@@ -26,38 +31,62 @@ jobs:
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: Compile unsigned iPhone device app with full HealthKit entitlements
+      - name: Compile unsigned iPhone device app
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package full-capability unsigned iPhone IPA
+      - name: Verify HealthKit entitlement declaration and Xcode configuration
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          SETTINGS="$(xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings)"
+          printf '%s\n' "$SETTINGS" | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
+          python3 - <<'PY'
+          import plistlib
+          import subprocess
+          from pathlib import Path
+
+          relative = "ios/RunJeetNative/RunJeetNative.entitlements"
+          path = Path("RunJeetNative/RunJeetNative.entitlements")
+          print(f"Working directory: {Path.cwd()}")
+          print(f"Configured entitlement file: {path.resolve()} (exists={path.is_file()})")
+          if not path.is_file():
+              raise SystemExit("Configured HealthKit entitlement file does not exist.")
+
+          # Validate the committed Git blob as the source of truth, then ensure
+          # the build workspace has not replaced or altered that file.
+          committed_raw = subprocess.check_output(["git", "show", f"HEAD:{relative}"])
+          working_raw = path.read_bytes()
+          committed = plistlib.loads(committed_raw)
+          working = plistlib.loads(working_raw)
+          print(f"Committed entitlement keys: {list(committed.keys())!r}")
+          print(f"Workspace entitlement keys: {list(working.keys())!r}")
+          if committed_raw != working_raw:
+              raise SystemExit("Workspace entitlement file differs from the committed source file.")
+
+          required = (
+              "com.apple.developer.healthkit",
+              "com.apple.developer.healthkit.background-delivery",
+          )
+          missing = [key for key in required if committed.get(key) is not True]
+          if missing:
+              raise SystemExit("Committed source is missing or disables HealthKit entitlements: " + ", ".join(missing))
+          print("Committed and workspace HealthKit entitlement declarations are valid and match.")
+          PY
+          echo "Final signed-app entitlement and provisioning-profile validation requires an Apple-signed build."
+      - name: Package unsigned iPhone IPA
         run: |
           mkdir -p ios/ipa/Payload
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
-          /usr/bin/zip -qry RunJeet-unsigned.ipa Payload
-      - name: Upload full-capability iPhone IPA
+          /usr/bin/zip -qry GATIVX-unsigned.ipa Payload
+      - name: Upload unsigned iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-unsigned-ipa
-          path: ios/ipa/RunJeet-unsigned.ipa
-      - name: Compile iPhone free-sideload build without restricted HealthKit entitlements
-        working-directory: ios
-        run: |
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath free-device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= build
-      - name: Package Core Motion free-sideload IPA
-        run: |
-          mkdir -p ios/free-ipa/Payload
-          cp -R ios/free-device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/free-ipa/Payload/
-          cd ios/free-ipa
-          /usr/bin/zip -qry RunJeet-CoreMotion-free-sideload.ipa Payload
-      - name: Upload Core Motion free-sideload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: runjeet-iphone-free-sideload-coremotion
-          path: ios/free-ipa/RunJeet-CoreMotion-free-sideload.ipa
+          name: gativx-iphone-unsigned-ipa
+          path: ios/ipa/GATIVX-unsigned.ipa
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-ios-simulator-build
+          name: gativx-ios-simulator-build
           path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app

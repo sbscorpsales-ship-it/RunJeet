@@ -19,10 +19,15 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.units.Energy
 import org.json.JSONObject
 import androidx.lifecycle.lifecycleScope
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -32,12 +37,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var healthClient: HealthConnectClient? = null
     private var pendingGpsStart = false
+    private var latestSleepPayload: String? = null
     private val writeWorkoutPermissions = setOf(HealthPermission.getWritePermission(ExerciseSessionRecord::class), HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class))
     private val readHealthPermissions = setOf(
         RunJeetStepSource.readStepsPermission,
         HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(ExerciseSessionRecord::class)
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(SleepSessionRecord::class)
     )
 
     private val locationPermissionRequest = registerForActivityResult(
@@ -62,6 +69,9 @@ class MainActivity : ComponentActivity() {
         if (HealthPermission.getReadPermission(ExerciseSessionRecord::class) in granted) {
             readHealthConnectWorkouts()
         }
+        if (HealthPermission.getReadPermission(SleepSessionRecord::class) in granted) {
+            readHealthConnectSleep()
+        }
         requestActivityPermission()
     }
 
@@ -69,7 +79,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) startHardwarePedometer()
-        else dispatchSteps(0L, "ANDROID_PEDOMETER_PERMISSION_REQUIRED")
+        else RunJeetWebBridge.emit("runjeetPedometerStatus", JSONObject().put("status", "PERMISSION_REQUIRED").put("message", "Allow Activity Recognition to record genuine steps. No step count was recorded.").toString())
     }
 
     private val notificationPermissionRequest = registerForActivityResult(
@@ -90,6 +100,7 @@ class MainActivity : ComponentActivity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     latestSteps?.let { dispatchSteps(it.first, it.second) } ?: dispatchCachedHardwareSteps()
+                    latestSleepPayload?.let { payload -> view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));", null) }
                     dispatchStoredRoute()
                 }
             }
@@ -115,6 +126,35 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface fun clearRoute() { getSharedPreferences(RunJeetLocationService.PREFS, MODE_PRIVATE).edit().putString(RunJeetLocationService.KEY_ROUTE, "[]").apply() }
         @JavascriptInterface fun requestRoute() { runOnUiThread { dispatchStoredRoute() } }
         @JavascriptInterface fun saveWorkout(payload: String) { saveWorkoutToHealthConnect(payload) }
+        @JavascriptInterface fun hasNotificationPermission(): Boolean {
+            return Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        }
+        @JavascriptInterface fun scheduleWellnessReminder(kind: String, enabled: Boolean) {
+            runOnUiThread { scheduleWellnessReminderWork(kind, enabled) }
+        }
+    }
+
+    private fun scheduleWellnessReminderWork(kind: String, enabled: Boolean) {
+        if (kind != "water" && kind != "sedentary") return
+        val workName = "gativx-wellness-$kind"
+        val manager = WorkManager.getInstance(applicationContext)
+        if (!enabled) {
+            manager.cancelUniqueWork(workName)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            RunJeetWebBridge.emit("runjeetNativeReminderStatus", JSONObject()
+                .put("message", "Allow notifications in Android Settings to receive wellness reminders.")
+                .toString())
+            return
+        }
+        val intervalMinutes = if (kind == "water") 60L else 45L
+        val request = PeriodicWorkRequestBuilder<WellnessReminderWorker>(intervalMinutes, java.util.concurrent.TimeUnit.MINUTES)
+            .setInputData(workDataOf("kind" to kind))
+            .build()
+        manager.enqueueUniquePeriodicWork(workName, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     private fun requestLocationAccessAndStart() {
@@ -262,6 +302,66 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: Exception) {
                 requestActivityPermission()
+            }
+        }
+    }
+
+    private fun readHealthConnectSleep() {
+        val client = healthClient ?: return
+        lifecycleScope.launch {
+            try {
+                val end = Instant.now()
+                val start = end.minusSeconds(18 * 60 * 60)
+                val response = client.readRecords(
+                    ReadRecordsRequest(
+                        recordType = SleepSessionRecord::class,
+                        timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(start, end),
+                        pageSize = 100
+                    )
+                )
+                val intervals = response.records.flatMap { session ->
+                    val asleepStages = session.stages.filter { it.stage == 2 || it.stage == 4 || it.stage == 5 || it.stage == 6 }
+                    if (asleepStages.isNotEmpty()) asleepStages.map { it.startTime to it.endTime }
+                    else if (session.stages.isEmpty()) listOf(session.startTime to session.endTime)
+                    else emptyList()
+                }.sortedBy { it.first }
+                var totalSeconds = 0L
+                var rangeStart: Instant? = null
+                var rangeEnd: Instant? = null
+                intervals.forEach { interval ->
+                    val currentEnd = rangeEnd
+                    if (currentEnd == null) {
+                        rangeStart = interval.first
+                        rangeEnd = interval.second
+                    } else if (!interval.first.isAfter(currentEnd)) {
+                        if (interval.second.isAfter(currentEnd)) rangeEnd = interval.second
+                    } else {
+                        rangeStart?.let { first -> totalSeconds += java.time.Duration.between(first, currentEnd).seconds }
+                        rangeStart = interval.first
+                        rangeEnd = interval.second
+                    }
+                }
+                val finalStart = rangeStart
+                val finalEnd = rangeEnd
+                if (finalStart != null && finalEnd != null) {
+                    totalSeconds += java.time.Duration.between(finalStart, finalEnd).seconds
+                }
+                if (totalSeconds > 0) {
+                    val hours = (totalSeconds / 3600.0).coerceIn(0.0, 24.0)
+                    val payload = JSONObject()
+                        .put("hours", hours)
+                        .put("source", "HEALTH CONNECT")
+                        .put("date", LocalDate.now(ZoneId.systemDefault()).toString())
+                    runOnUiThread {
+                        latestSleepPayload = payload.toString()
+                        if (::webView.isInitialized) webView.evaluateJavascript(
+                            "window.dispatchEvent(new CustomEvent('runjeetNativeSleep',{detail:$payload}));",
+                            null
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Sleep permission is optional; manual sleep logging remains available.
             }
         }
     }
@@ -416,6 +516,7 @@ class MainActivity : ComponentActivity() {
             readHealthConnectSteps()
             readHealthConnectActivityTotals()
             readHealthConnectWorkouts()
+            readHealthConnectSleep()
             // Re-assert the foreground sensor service when the user returns.
             // START_STICKY also asks Android to recreate it after ordinary process
             // reclamation; this covers cases where the OS did not recreate it.
