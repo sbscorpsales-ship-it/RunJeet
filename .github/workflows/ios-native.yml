@@ -43,26 +43,35 @@ jobs:
           printf '%s\n' "$SETTINGS" | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
           python3 - <<'PY'
           import plistlib
+          import subprocess
           from pathlib import Path
 
+          relative = "ios/RunJeetNative/RunJeetNative.entitlements"
           path = Path("RunJeetNative/RunJeetNative.entitlements")
           print(f"Working directory: {Path.cwd()}")
-          print(f"Entitlements file: {path.resolve()} (exists={path.is_file()})")
+          print(f"Configured entitlement file: {path.resolve()} (exists={path.is_file()})")
           if not path.is_file():
               raise SystemExit("Configured HealthKit entitlement file does not exist.")
-          raw = path.read_bytes()
-          entitlements = plistlib.loads(raw)
-          print(f"Parsed entitlement keys: {list(entitlements.keys())!r}")
-          print(f"Parsed HealthKit values: healthkit={entitlements.get('com.apple.developer.healthkit')!r}, background={entitlements.get('com.apple.developer.healthkit.background-delivery')!r}")
+
+          # Validate the committed Git blob as the source of truth, then ensure
+          # the build workspace has not replaced or altered that file.
+          committed_raw = subprocess.check_output(["git", "show", f"HEAD:{relative}"])
+          working_raw = path.read_bytes()
+          committed = plistlib.loads(committed_raw)
+          working = plistlib.loads(working_raw)
+          print(f"Committed entitlement keys: {list(committed.keys())!r}")
+          print(f"Workspace entitlement keys: {list(working.keys())!r}")
+          if committed_raw != working_raw:
+              raise SystemExit("Workspace entitlement file differs from the committed source file.")
 
           required = (
               "com.apple.developer.healthkit",
               "com.apple.developer.healthkit.background-delivery",
           )
-          missing = [key for key in required if entitlements.get(key) != True]
+          missing = [key for key in required if committed.get(key) is not True]
           if missing:
-              raise SystemExit("Missing or disabled HealthKit entitlement keys: " + ", ".join(missing))
-          print("HealthKit entitlement declarations are valid and referenced by the Xcode target.")
+              raise SystemExit("Committed source is missing or disables HealthKit entitlements: " + ", ".join(missing))
+          print("Committed and workspace HealthKit entitlement declarations are valid and match.")
           PY
           echo "Final signed-app entitlement and provisioning-profile validation requires an Apple-signed build."
       - name: Package unsigned iPhone IPA
