@@ -9,7 +9,7 @@ const steps=()=>hasTodayNativeSteps()?nativeDailySteps:(state.nativeStepsByDay?.
 function memberTargets(){
  const p=state?.profile||{},weight=Number(p.weightKg??p.startingWeightKg),target=Number(p.targetWeightKg);
  const gap=Number.isFinite(weight)&&weight>=30&&weight<=250&&Number.isFinite(target)&&target>=25&&target<=300?Math.max(0,weight-target):0;
- const durationDays=Number.parseInt(String(p.goalDuration||"180").match(/\\d+/)?.[0]||"180",10);
+ const durationDays=Number.parseInt(String(p.goalDuration||"180").split(" ")[0]||"180",10);
  const timelineFactor=Math.pow(180/Math.max(30,Math.min(365,durationDays)),0.25);
  const stepGoal=Math.round(Math.min(8000,Math.max(5000,5000+gap*300*timelineFactor))/250)*250;
  const calorieGoal=Math.round(Math.min(500,Math.max(300,300+gap*10*Math.sqrt(180/Math.max(30,Math.min(365,durationDays)))))/10)*10;
