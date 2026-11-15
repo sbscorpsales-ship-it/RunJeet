@@ -80,7 +80,7 @@
     const local=window.__GATIVX_LOCAL_PROFILE__||{};
     const patch={id:authUser.id,display_name:existing?.display_name||local.name||authUser.email?.split("@")[0]||"GATIVX Member",
       goal_purpose:existing?.goal_purpose||local.purpose||null,goal_text:existing?.goal_text||local.goal||null,
-      goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,target_weight_kg:existing?.target_weight_kg||75};
+      goal_type:existing?.goal_type||local.goalCategory||"fitness",goal_duration:existing?.goal_duration||local.goalDuration||null,goal_feeling:existing?.goal_feeling||local.goalFeeling||null,starting_weight_kg:existing?.starting_weight_kg??local.startingWeightKg??local.weightKg??null,target_weight_kg:local.targetWeightKg??existing?.target_weight_kg??local.weightKg??75};
     const {error}=await client.from("profiles").upsert(patch,{onConflict:"id"});
     if(error) throw error;
   }
@@ -177,7 +177,7 @@
     const p=profile.data;
     if(p) {
       const local=window.__GATIVX_LOCAL_PROFILE__||{};
-      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goal:p.goal_text||local.goal,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,cloudUserId:user.id,signedIn:true};
+      const merged={...local,name:p.display_name||local.name,purpose:p.goal_purpose||local.purpose,goalCategory:p.goal_type||local.goalCategory,goal:p.goal_text||local.goal,goalDuration:p.goal_duration||local.goalDuration,goalFeeling:p.goal_feeling||local.goalFeeling,weightKg:local.weightKg??p.starting_weight_kg,targetWeightKg:p.target_weight_kg??local.targetWeightKg,startingWeightKg:p.starting_weight_kg??local.startingWeightKg,cloudUserId:user.id,signedIn:true};
       window.__GATIVX_CLOUD_PROFILE__=merged;
       window.dispatchEvent(new CustomEvent("gativxCloudProfile",{detail:merged}));
     }
@@ -231,7 +231,7 @@
   window.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("pageshow",()=>{if(user){flushQueue().then(pullCloud).catch(e=>status(e.message,true));}});
   window.addEventListener("gativxDailyActionsChanged",e=>{if(!user)return;const d=e.detail||{};if(d.source==="cloud"||!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||!d.completed||typeof d.completed!=="object")return;enqueue({id:"actions:"+d.date,type:"daily_actions",date:d.date,completed:d.completed,updatedAt:d.updatedAt||new Date().toISOString()});});
-  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
+  window.addEventListener("gativxProfileSaved",e=>{if(!user)return;const p=e.detail||{};client.from("profiles").upsert({id:user.id,display_name:p.name||null,goal_text:p.goal||null,goal_purpose:p.purpose||null,goal_duration:p.goalDuration||null,goal_feeling:p.goalFeeling||null,starting_weight_kg:p.startingWeightKg??p.weightKg??null,target_weight_kg:p.targetWeightKg??p.weightKg??75},{onConflict:"id"}).then(({error})=>{if(error)status(error.message,true);});});
   async function boot() {
     mount();
     if(!window.supabase?.createClient){status("Cloud library did not load. Refresh while connected.",true);return;}
