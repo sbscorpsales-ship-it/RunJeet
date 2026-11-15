@@ -46,14 +46,20 @@ jobs:
           from pathlib import Path
 
           path = Path("RunJeetNative/RunJeetNative.entitlements")
-          with path.open("rb") as stream:
-              entitlements = plistlib.load(stream)
+          print(f"Working directory: {Path.cwd()}")
+          print(f"Entitlements file: {path.resolve()} (exists={path.is_file()})")
+          if not path.is_file():
+              raise SystemExit("Configured HealthKit entitlement file does not exist.")
+          raw = path.read_bytes()
+          entitlements = plistlib.loads(raw)
+          print(f"Parsed entitlement keys: {list(entitlements.keys())!r}")
+          print(f"Parsed HealthKit values: healthkit={entitlements.get('com.apple.developer.healthkit')!r}, background={entitlements.get('com.apple.developer.healthkit.background-delivery')!r}")
 
           required = (
               "com.apple.developer.healthkit",
               "com.apple.developer.healthkit.background-delivery",
           )
-          missing = [key for key in required if entitlements.get(key) is not True]
+          missing = [key for key in required if entitlements.get(key) != True]
           if missing:
               raise SystemExit("Missing or disabled HealthKit entitlement keys: " + ", ".join(missing))
           print("HealthKit entitlement declarations are valid and referenced by the Xcode target.")
