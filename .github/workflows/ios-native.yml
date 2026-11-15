@@ -41,11 +41,23 @@ jobs:
           set -euo pipefail
           SETTINGS="$(xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings)"
           printf '%s\n' "$SETTINGS" | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
-          ENTITLEMENTS="RunJeetNative/RunJeetNative.entitlements"
-          test -f "$ENTITLEMENTS"
-          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit' "$ENTITLEMENTS" | grep -q true
-          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit.background-delivery' "$ENTITLEMENTS" | grep -q true
-          echo "HealthKit entitlement declarations are present and referenced by the Xcode target."
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          path = Path("RunJeetNative/RunJeetNative.entitlements")
+          with path.open("rb") as stream:
+              entitlements = plistlib.load(stream)
+
+          required = (
+              "com.apple.developer.healthkit",
+              "com.apple.developer.healthkit.background-delivery",
+          )
+          missing = [key for key in required if entitlements.get(key) is not True]
+          if missing:
+              raise SystemExit("Missing or disabled HealthKit entitlement keys: " + ", ".join(missing))
+          print("HealthKit entitlement declarations are valid and referenced by the Xcode target.")
+          PY
           echo "Final signed-app entitlement and provisioning-profile validation requires an Apple-signed build."
       - name: Package unsigned iPhone IPA
         run: |
