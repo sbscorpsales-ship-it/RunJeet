@@ -31,26 +31,29 @@ jobs:
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: Compile unsigned iPhone device app with full HealthKit entitlements
+      - name: Compile unsigned iPhone device app
         working-directory: ios
         run: |
           xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Verify generated HealthKit entitlement is included in the iOS build
+      - name: Verify HealthKit entitlement declaration and Xcode configuration
         working-directory: ios
         run: |
           set -euo pipefail
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
-          ENTITLEMENTS="$(find device-build -name '*.xcent' -print -quit)"
-          test -n "$ENTITLEMENTS" || { echo "No generated iOS entitlement payload found."; exit 1; }
+          SETTINGS="$(xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -showBuildSettings)"
+          printf '%s\n' "$SETTINGS" | grep -F 'CODE_SIGN_ENTITLEMENTS = RunJeetNative/RunJeetNative.entitlements'
+          ENTITLEMENTS="RunJeetNative/RunJeetNative.entitlements"
+          test -f "$ENTITLEMENTS"
           /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit' "$ENTITLEMENTS" | grep -q true
-          echo "HealthKit entitlement is present in the generated device-build entitlement payload."
-      - name: Package full-capability unsigned iPhone IPA
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.healthkit.background-delivery' "$ENTITLEMENTS" | grep -q true
+          echo "HealthKit entitlement declarations are present and referenced by the Xcode target."
+          echo "Final signed-app entitlement and provisioning-profile validation requires an Apple-signed build."
+      - name: Package unsigned iPhone IPA
         run: |
           mkdir -p ios/ipa/Payload
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
           /usr/bin/zip -qry GATIVX-unsigned.ipa Payload
-      - name: Upload full-capability iPhone IPA
+      - name: Upload unsigned iPhone IPA
         uses: actions/upload-artifact@v4
         with:
           name: gativx-iphone-unsigned-ipa
