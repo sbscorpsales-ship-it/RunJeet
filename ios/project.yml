@@ -38,8 +38,6 @@ targets:
         NSLocationAlwaysUsageDescription: "GATIVX uses background location only during an activity you start."
         NSHealthShareUsageDescription: "GATIVX reads your Apple Health activity data when access is available."
         NSHealthUpdateUsageDescription: "GATIVX saves workouts to Apple Health when you choose to export them."
-    entitlements:
-      path: RunJeetNative/RunJeetNative.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.runjeet.nativeapp
