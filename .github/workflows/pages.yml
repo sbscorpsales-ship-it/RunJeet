@@ -1,7 +1,15 @@
-name: Deploy RunJeet to GitHub Pages
+name: Deploy NURUN to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'cloud-sync.js'
+      - 'index.html'
+      - 'styles.css'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +19,17 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate application JavaScript
+        run: node --check app.js
+      - name: Validate cloud sync JavaScript
+        run: node --check cloud-sync.js
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
