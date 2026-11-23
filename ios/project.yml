@@ -33,8 +33,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
         NSMotionUsageDescription: "NURUN uses your iPhone motion sensor to measure genuine steps."
-        NSLocationWhenInUseUsageDescription: "RunJeet records your GPS route and distance during activities you start."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "RunJeet can continue recording an activity you started when your iPhone is locked."
+        NSLocationWhenInUseUsageDescription: "NURUN records your GPS route and distance during activities you start."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "NURUN can continue recording an activity you started when your iPhone is locked."
         NSLocationAlwaysUsageDescription: "NURUN uses background location only during an activity you start."
         NSHealthShareUsageDescription: "NURUN reads your Apple Health activity data when access is available."
         NSHealthUpdateUsageDescription: "NURUN saves workouts to Apple Health when you choose to export them."
