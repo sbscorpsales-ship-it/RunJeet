@@ -10,6 +10,11 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-native.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-native.yml'
   workflow_dispatch:
 jobs:
   build:
@@ -35,12 +40,12 @@ jobs:
           mkdir -p ios/ipa/Payload
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
-          /usr/bin/zip -qry RunJeet-unsigned.ipa Payload
+          /usr/bin/zip -qry NURUN-unsigned.ipa Payload
       - name: Upload full-capability iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-unsigned-ipa
-          path: ios/ipa/RunJeet-unsigned.ipa
+          name: nurun-iphone-unsigned-ipa
+          path: ios/ipa/NURUN-unsigned.ipa
       - name: Compile iPhone free-sideload build without restricted HealthKit entitlements
         working-directory: ios
         run: |
@@ -50,14 +55,14 @@ jobs:
           mkdir -p ios/free-ipa/Payload
           cp -R ios/free-device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/free-ipa/Payload/
           cd ios/free-ipa
-          /usr/bin/zip -qry RunJeet-CoreMotion-free-sideload.ipa Payload
+          /usr/bin/zip -qry NURUN-CoreMotion-free-sideload.ipa Payload
       - name: Upload Core Motion free-sideload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-free-sideload-coremotion
-          path: ios/free-ipa/RunJeet-CoreMotion-free-sideload.ipa
+          name: nurun-iphone-free-sideload-coremotion
+          path: ios/free-ipa/NURUN-CoreMotion-free-sideload.ipa
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-ios-simulator-build
+          name: nurun-ios-simulator-build
           path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app
