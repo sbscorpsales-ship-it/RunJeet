@@ -1,11 +1,16 @@
 name: iOS Native Build Check
 
-# Do not cancel an in-progress iOS build when another commit arrives.
+# Isolate each commit so a newer PR update cannot cancel an iOS build waiting for a macOS runner.
 concurrency:
-  group: runjeet-ios-native-build
+  group: runjeet-ios-native-build-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 on:
   push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-native.yml'
+  pull_request:
     branches: [main]
     paths:
       - 'ios/**'
@@ -35,29 +40,40 @@ jobs:
           mkdir -p ios/ipa/Payload
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
-          /usr/bin/zip -qry RunJeet-unsigned.ipa Payload
+          /usr/bin/zip -qry NURUN-unsigned.ipa Payload
+      - name: Record full-capability IPA identity
+        run: |
+          echo "NURUN build: $GITHUB_SHA (full-entitlement-unsigned)" >> "$GITHUB_STEP_SUMMARY"
+          shasum -a 256 ios/ipa/NURUN-unsigned.ipa | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload full-capability iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-unsigned-ipa
-          path: ios/ipa/RunJeet-unsigned.ipa
+          name: nurun-iphone-unsigned-ipa-${{ github.sha }}
+          path: ios/ipa/NURUN-unsigned.ipa
       - name: Compile iPhone free-sideload build without restricted HealthKit entitlements
         working-directory: ios
         run: |
-          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath free-device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= build
+          xcodebuild -project RunJeetNative.xcodeproj -scheme RunJeetNative -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath free-device-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS= SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) NURUN_FREE_SIDELOAD' build
       - name: Package Core Motion free-sideload IPA
         run: |
           mkdir -p ios/free-ipa/Payload
           cp -R ios/free-device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/free-ipa/Payload/
           cd ios/free-ipa
-          /usr/bin/zip -qry RunJeet-CoreMotion-free-sideload.ipa Payload
+          /usr/bin/zip -qry NURUN-CoreMotion-free-sideload.ipa Payload
+      - name: Verify IPA and record build identity
+        run: |
+          echo "NURUN build: $GITHUB_SHA (free-sideload-coremotion)" >> "$GITHUB_STEP_SUMMARY"
+          shasum -a 256 ios/free-ipa/NURUN-CoreMotion-free-sideload.ipa | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload Core Motion free-sideload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-iphone-free-sideload-coremotion
-          path: ios/free-ipa/RunJeet-CoreMotion-free-sideload.ipa
+          name: nurun-iphone-free-sideload-coremotion-${{ github.sha }}
+          path: ios/free-ipa/NURUN-CoreMotion-free-sideload.ipa
+      - name: Record simulator build identity
+        run: |
+          echo "NURUN build: $GITHUB_SHA (simulator)" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: runjeet-ios-simulator-build
+          name: nurun-ios-simulator-build-${{ github.sha }}
           path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app

@@ -1,6 +1,6 @@
 {
-  "name": "RunJeet",
-  "short_name": "RunJeet",
+  "name": "NURUN",
+  "short_name": "NURUN",
   "description": "Simple steps, GPS activity and a live dashboard.",
   "start_url": "./",
   "scope": "./",

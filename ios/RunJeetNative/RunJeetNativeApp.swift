@@ -22,7 +22,7 @@ struct RunJeetWebView: UIViewRepresentable {
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.navigationDelegate = context.coordinator
         context.coordinator.webView = web
-        if let url = URL(string: "https://sbscorpsales-ship-it.github.io/RunJeet/") {
+        if let url = URL(string: "https://sbscorpsales-ship-it.github.io/RunJeet/nurun-preview/") {
             web.load(URLRequest(url: url))
         }
         context.coordinator.requestHealthAccessAndStart()
@@ -49,9 +49,11 @@ struct RunJeetWebView: UIViewRepresentable {
             locationManager.allowsBackgroundLocationUpdates = true
             foregroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
+                #if !NURUN_FREE_SIDELOAD
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
+                #endif
                 if !self.pedometerActive { self.startPedometer() }
                 self.resumeLocationIfNeeded()
             }
@@ -118,7 +120,7 @@ struct RunJeetWebView: UIViewRepresentable {
             // route buffer alive; the next valid fix will continue the same session.
             let message: String
             if code == .locationUnknown {
-                message = "GPS signal temporarily unavailable. RunJeet is keeping your activity open and waiting for a new fix."
+                message = "GPS signal temporarily unavailable. NURUN is keeping your activity open and waiting for a new fix."
             } else if code == .denied {
                 message = "Location access is off. Enable location permission to continue GPS recording. Your saved route is retained."
             } else {
@@ -176,17 +178,25 @@ struct RunJeetWebView: UIViewRepresentable {
             flushHealthTotals()
             flushHealthWorkouts()
             flushStoredRoute()
+            #if !NURUN_FREE_SIDELOAD
             queryHealthSteps()
             queryHealthActivityTotals()
             queryHealthWorkouts()
+            #endif
         }
 
+        // NURUN_FREE_SIDELOAD intentionally skips HealthKit; Core Motion remains the local step source.
         func requestHealthAccessAndStart() {
             // Core Motion is independent of HealthKit. Start it immediately so
             // a HealthKit prompt, denial, or unavailable entitlement can never
             // leave the primary step counter stuck at zero.
             startPedometer()
 
+            // Free-sideload builds omit HealthKit API calls because this signing profile has no HealthKit entitlement.
+#if NURUN_FREE_SIDELOAD
+            sendPedometerStatus("HEALTH_EXPORT_UNAVAILABLE", message: "Apple Health export is not included in this free-sideload build. Your steps are measured with iPhone Motion and workouts are saved in NURUN.")
+            return
+            #else
             guard HKHealthStore.isHealthDataAvailable(),
                   let steps = HKObjectType.quantityType(forIdentifier: .stepCount),
                   let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
@@ -213,6 +223,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
             }
+            #endif
         }
 
         private func queryHealthSteps(completion: (() -> Void)? = nil) {
@@ -389,7 +400,7 @@ struct RunJeetWebView: UIViewRepresentable {
             guard !pedometerActive else { return }
             switch CMPedometer.authorizationStatus() {
             case .denied, .restricted:
-                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for RunJeet in iPhone Settings.")
+                sendPedometerStatus("PERMISSION_REQUIRED", message: "Allow Motion & Fitness access for NURUN in iPhone Settings.")
                 return
             default:
                 break
@@ -441,16 +452,20 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
         private func saveWorkout(_ payload: String) {
+            #if NURUN_FREE_SIDELOAD
+            sendWorkoutExportStatus(success: false, message: "Apple Health export is not available in this free-sideload build. Your NURUN activity remains saved locally.")
+            return
+            #else
             guard let data = payload.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let startMs = object["startTime"] as? Double,
                   let endMs = object["endTime"] as? Double,
                   endMs > startMs else {
-                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Invalid workout record. Your NURUN activity remains saved locally.")
                 return
             }
             guard HKHealthStore.isHealthDataAvailable() else {
-                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your RunJeet activity remains saved locally.")
+                sendWorkoutExportStatus(success: false, message: "Apple Health is unavailable. Your NURUN activity remains saved locally.")
                 return
             }
             let start = Date(timeIntervalSince1970: startMs / 1000)
@@ -475,9 +490,10 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.sendWorkoutExportStatus(success: true, message: "Workout exported to Apple Health.")
                 } else {
                     let reason = error?.localizedDescription ?? "permission not granted"
-                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your RunJeet activity remains saved locally.")
+                    self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your NURUN activity remains saved locally.")
                 }
             }
+            #endif
         }
 
         private func sendSteps(_ count: Int, source: String) {
