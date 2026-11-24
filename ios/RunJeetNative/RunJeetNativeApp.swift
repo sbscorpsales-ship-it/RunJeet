@@ -185,6 +185,7 @@ struct RunJeetWebView: UIViewRepresentable {
             #endif
         }
 
+        // NURUN_FREE_SIDELOAD intentionally skips HealthKit; Core Motion remains the local step source.
         func requestHealthAccessAndStart() {
             // Core Motion is independent of HealthKit. Start it immediately so
             // a HealthKit prompt, denial, or unavailable entitlement can never
