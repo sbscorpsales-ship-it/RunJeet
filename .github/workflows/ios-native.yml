@@ -1,9 +1,9 @@
 name: iOS Native Build Check
 
-# Keep only the newest iOS CI run for this branch; superseded queued/running builds are obsolete.
+# Isolate each commit so a newer PR update cannot cancel an iOS build waiting for a macOS runner.
 concurrency:
-  group: runjeet-ios-native-build-${{ github.ref }}
-  cancel-in-progress: true
+  group: runjeet-ios-native-build-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 on:
   push:
     branches: [main]
