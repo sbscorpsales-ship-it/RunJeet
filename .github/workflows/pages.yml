@@ -19,7 +19,8 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  # Serialize real Pages deployments, but do not let PR validation replace a queued preview deploy.
+  group: ${{ github.event_name == 'pull_request' && 'pages-validation' || 'pages-deploy' }}
   cancel-in-progress: false
 jobs:
   validate:
