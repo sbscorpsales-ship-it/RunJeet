@@ -1,0 +1,31 @@
+name: GATIVX IAR Unit Tests
+on:
+  pull_request:
+    branches: [feature/gativx-platform-unification]
+    paths:
+      - 'src/iar/**'
+      - 'tests/iar/**'
+      - '.github/workflows/iar-validation.yml'
+  push:
+    branches: [feat/gativx-intelligent-activity-reconciliation]
+    paths:
+      - 'src/iar/**'
+      - 'tests/iar/**'
+      - '.github/workflows/iar-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  iar-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate reconciliation module syntax
+        run: node --check src/iar/reconcile.js
+      - name: Run reconciliation unit tests
+        run: node --test tests/iar/reconcile.test.js
+      - name: Check patch whitespace
+        run: git diff --check
