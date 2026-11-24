@@ -41,10 +41,14 @@ jobs:
           cp -R ios/device-build/Build/Products/Release-iphoneos/RunJeetNative.app ios/ipa/Payload/
           cd ios/ipa
           /usr/bin/zip -qry NURUN-unsigned.ipa Payload
+      - name: Record full-capability IPA identity
+        run: |
+          echo "NURUN build: $GITHUB_SHA (full-entitlement-unsigned)" >> "$GITHUB_STEP_SUMMARY"
+          shasum -a 256 ios/ipa/NURUN-unsigned.ipa | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload full-capability iPhone IPA
         uses: actions/upload-artifact@v4
         with:
-          name: nurun-iphone-unsigned-ipa
+          name: nurun-iphone-unsigned-ipa-${{ github.sha }}
           path: ios/ipa/NURUN-unsigned.ipa
       - name: Compile iPhone free-sideload build without restricted HealthKit entitlements
         working-directory: ios
@@ -65,8 +69,11 @@ jobs:
         with:
           name: nurun-iphone-free-sideload-coremotion-${{ github.sha }}
           path: ios/free-ipa/NURUN-CoreMotion-free-sideload.ipa
+      - name: Record simulator build identity
+        run: |
+          echo "NURUN build: $GITHUB_SHA (simulator)" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: nurun-ios-simulator-build
+          name: nurun-ios-simulator-build-${{ github.sha }}
           path: ios/build/Build/Products/Debug-iphonesimulator/RunJeetNative.app
