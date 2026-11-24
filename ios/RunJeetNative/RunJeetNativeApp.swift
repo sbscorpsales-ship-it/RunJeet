@@ -192,7 +192,8 @@ struct RunJeetWebView: UIViewRepresentable {
             // leave the primary step counter stuck at zero.
             startPedometer()
 
-            #if NURUN_FREE_SIDELOAD
+            // Free-sideload builds omit HealthKit API calls because this signing profile has no HealthKit entitlement.
+#if NURUN_FREE_SIDELOAD
             sendPedometerStatus("HEALTH_EXPORT_UNAVAILABLE", message: "Apple Health export is not included in this free-sideload build. Your steps are measured with iPhone Motion and workouts are saved in NURUN.")
             return
             #else
