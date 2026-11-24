@@ -77,7 +77,7 @@ jobs:
   deploy-preview:
     if: github.event_name == 'push' && github.ref == 'refs/heads/feat/nurun-brand-foundation'
     environment:
-      name: github-pages
+      name: github-pages-preview
       url: ${{ steps.deployment.outputs.page_url }}nurun-preview/
     runs-on: ubuntu-latest
     steps:
