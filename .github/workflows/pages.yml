@@ -1,7 +1,7 @@
-name: Deploy NURUN to GitHub Pages
+name: Deploy NURUN preview alongside the existing RunJeet site
 on:
   push:
-    branches: [main]
+    branches: [main, feat/nurun-brand-foundation]
   pull_request:
     branches: [main]
     paths:
@@ -9,6 +9,9 @@ on:
       - 'cloud-sync.js'
       - 'index.html'
       - 'styles.css'
+      - 'manifest.webmanifest'
+      - 'icon.svg'
+      - 'sw.js'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
@@ -45,14 +48,15 @@ jobs:
             curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$LIVE_BASE/$asset" --output /dev/null
           done
           echo "Existing main Pages root and six core assets returned HTTP 200; no deployment was performed."
-  deploy:
-    if: github.event_name != 'pull_request'
+
+  deploy-main:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main site
         uses: actions/checkout@v4
       - name: Validate application JavaScript
         run: node --check app.js
@@ -62,10 +66,86 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
-      - name: Upload site
+      - name: Upload main site
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
-      - name: Deploy
+      - name: Deploy main site
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-preview:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/nurun-brand-foundation'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}nurun-preview/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the unchanged main site
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+          fetch-depth: 1
+      - name: Checkout the exact NURUN feature commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: nurun-src
+          fetch-depth: 1
+      - name: Compose a non-destructive NURUN preview
+        env:
+          EXPECTED_NURUN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(git -C site rev-parse HEAD)"
+          NURUN_SHA="$(git -C nurun-src rev-parse HEAD)"
+          test "$NURUN_SHA" = "$EXPECTED_NURUN_SHA"
+          grep -Fq '<title>RunJeet</title>' site/index.html
+          for asset in app.js cloud-sync.js styles.css manifest.webmanifest icon.svg sw.js; do
+            test -s "site/$asset"
+            test -s "nurun-src/$asset"
+          done
+          mkdir -p site/nurun-preview
+          for asset in index.html app.js cloud-sync.js styles.css manifest.webmanifest icon.svg sw.js; do
+            cp "nurun-src/$asset" "site/nurun-preview/$asset"
+          done
+          sed -i "s#<title>NURUN</title>#<title>NURUN</title><meta name=\"nurun-build\" content=\"$NURUN_SHA\">#" site/nurun-preview/index.html
+          printf '{"app":"NURUN","commit":"%s","main_commit":"%s"}\n' "$NURUN_SHA" "$MAIN_SHA" > site/nurun-preview/build-info.json
+          grep -Fq '<title>NURUN</title>' site/nurun-preview/index.html
+          git -C site diff --exit-code
+          unexpected="$(git -C site status --porcelain | grep -v '^?? nurun-preview/' || true)"
+          test -z "$unexpected"
+          echo "Main root preserved from $MAIN_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "NURUN preview source $NURUN_SHA" >> "$GITHUB_STEP_SUMMARY"
+          rm -rf site/.git nurun-src/.git
+      - name: Validate NURUN preview JavaScript
+        working-directory: nurun-src
+        run: |
+          node --check app.js
+          node --check cloud-sync.js
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload combined main plus NURUN preview site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy NURUN preview without changing the main root
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify main root and published NURUN preview
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          BASE="${PAGE_URL%/}"
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$BASE/" --output /tmp/main-index.html
+          grep -Fq '<title>RunJeet</title>' /tmp/main-index.html
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$BASE/nurun-preview/" --output /tmp/nurun-index.html
+          grep -Fq '<title>NURUN</title>' /tmp/nurun-index.html
+          for asset in app.js cloud-sync.js styles.css manifest.webmanifest icon.svg sw.js build-info.json; do
+            curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$BASE/nurun-preview/$asset" --output /dev/null
+          done
+          echo "Main RunJeet root and NURUN preview page plus seven assets returned HTTP 200." >> "$GITHUB_STEP_SUMMARY"
