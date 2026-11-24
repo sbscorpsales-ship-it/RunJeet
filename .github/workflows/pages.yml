@@ -1,7 +1,7 @@
 name: Deploy NURUN to GitHub Pages
 on:
   push:
-    branches: [main]
+    branches: [main, feat/nurun-brand-foundation]
   pull_request:
     branches: [main]
     paths:
