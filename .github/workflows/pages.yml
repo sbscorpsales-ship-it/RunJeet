@@ -28,6 +28,23 @@ jobs:
         run: node --check app.js
       - name: Validate cloud sync JavaScript
         run: node --check cloud-sync.js
+      - name: Verify NURUN entry point and required assets
+        run: |
+          grep -Fq '<title>NURUN</title>' index.html
+          for asset in app.js cloud-sync.js styles.css manifest.webmanifest icon.svg sw.js; do
+            test -s "$asset"
+          done
+      - name: Smoke-test existing live Pages site without changing it
+        env:
+          LIVE_BASE: https://sbscorpsales-ship-it.github.io/RunJeet
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$LIVE_BASE/" --output /tmp/live-index.html
+          grep -Fq '<title>RunJeet</title>' /tmp/live-index.html
+          for asset in app.js cloud-sync.js styles.css manifest.webmanifest icon.svg sw.js; do
+            curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --retry-all-errors "$LIVE_BASE/$asset" --output /dev/null
+          done
+          echo "Existing main Pages root and six core assets returned HTTP 200; no deployment was performed."
   deploy:
     if: github.event_name != 'pull_request'
     environment:
