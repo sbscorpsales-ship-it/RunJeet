@@ -22,7 +22,7 @@ struct RunJeetWebView: UIViewRepresentable {
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.navigationDelegate = context.coordinator
         context.coordinator.webView = web
-        if let url = URL(string: "https://sbscorpsales-ship-it.github.io/RunJeet/") {
+        if let url = URL(string: "https://sbscorpsales-ship-it.github.io/RunJeet/nurun-preview/") {
             web.load(URLRequest(url: url))
         }
         context.coordinator.requestHealthAccessAndStart()
