@@ -10,9 +10,18 @@ Reproduce the supplied reference exactly. Do not redesign, modernise, simplify, 
 
 Any proposed visual change requires explicit, separate founder approval before implementation. A developer preference, accessibility preference, framework limitation or generic design-system convention does not authorise a visual change. If an implementation limitation arises, report it and seek approval rather than silently changing the design.
 
+## Exact hero, background and profile details — individually locked
+
+- The **two runners** on the right side of the hero banner are mandatory: retain both people, their running poses, relative scale, positions, direction, clothing silhouettes and visual relationship as depicted. Do not replace them with one runner, different people, generic fitness icons, stock substitutions or abstract artwork.
+- Preserve the **sunrise/sunset horizon scene** behind the runners, including the bright sun at the right, warm glowing horizon and atmospheric depth.
+- Preserve the full **orange-to-red-to-golden-yellow sunrise gradient** across the hero banner, including its transitions, brightness, contrast and placement. Do not replace it with a flat colour, dark gradient, generic background or different photograph.
+- Preserve the **circular member profile portrait frame** at the left of the hero greeting: its circular crop, white/light outer ring, border thickness, size, position and spacing. Do not turn it into a square, remove its frame, change its shape or substitute a generic avatar when a real profile photo is available.
+- Preserve the hero's exact composition: profile/greeting on the left, large central GATIVX identity and tagline, Param IT Solutions endorsement beneath, and the two runners with the sunlit background on the right.
+- Preserve the original hero height, image crop, text alignment, spacing and balance. Do not let responsive adaptation remove, hide or replace the two runners, sunrise background or profile frame; maintain the approved composition and hierarchy.
+
 ## Elements to preserve
 
-- GATIVX logo and brand treatment; orange/red/yellow hero banner with running imagery; navy left navigation rail; white top bar.
+- GATIVX logo and brand treatment; orange/red/yellow hero banner with **both runners and the sunrise scene**; navy left navigation rail; white top bar.
 - Header structure: menu control, GATIVX Web Hub title, search, notification, member avatar/name and account control.
 - Greeting/profile area and hero identity, tagline and Param IT Solutions endorsement.
 - Goal, target date, weight-goal progress and Mission 75 summary strip.
@@ -31,8 +40,8 @@ Keep the design unchanged while binding each metric to validated, consented, rea
 ## Visual acceptance gate
 
 - Compare implementation against the founder screenshot at the same viewport/aspect ratio.
-- Verify branding, colour values, typography/font sizes, positions, card dimensions, order, chart/ring geometry, icons and navigation.
-- Check desktop and responsive layouts without changing the design's intended proportions or hierarchy.
+- Verify both runners, sunrise scene/gradient, circular profile frame, branding, colour values, typography/font sizes, positions, card dimensions, order, chart/ring geometry, icons and navigation.
+- Check desktop and responsive layouts without changing the design's intended proportions or hierarchy; both runners, sunrise background and profile frame must remain present.
 - Capture side-by-side screenshots and record any pixel/geometry differences.
 - Any unapproved visual deviation is a failed acceptance test.
 - Do not mark the dashboard complete until the founder can open the browser preview and inspect it.
