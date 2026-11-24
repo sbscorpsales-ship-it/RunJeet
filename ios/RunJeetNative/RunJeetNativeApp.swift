@@ -49,9 +49,11 @@ struct RunJeetWebView: UIViewRepresentable {
             locationManager.allowsBackgroundLocationUpdates = true
             foregroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
+                #if !NURUN_FREE_SIDELOAD
                 self.queryHealthSteps()
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
+                #endif
                 if !self.pedometerActive { self.startPedometer() }
                 self.resumeLocationIfNeeded()
             }
@@ -176,9 +178,11 @@ struct RunJeetWebView: UIViewRepresentable {
             flushHealthTotals()
             flushHealthWorkouts()
             flushStoredRoute()
+            #if !NURUN_FREE_SIDELOAD
             queryHealthSteps()
             queryHealthActivityTotals()
             queryHealthWorkouts()
+            #endif
         }
 
         func requestHealthAccessAndStart() {
@@ -187,6 +191,10 @@ struct RunJeetWebView: UIViewRepresentable {
             // leave the primary step counter stuck at zero.
             startPedometer()
 
+            #if NURUN_FREE_SIDELOAD
+            sendPedometerStatus("HEALTH_EXPORT_UNAVAILABLE", message: "Apple Health export is not included in this free-sideload build. Your steps are measured with iPhone Motion and workouts are saved in NURUN.")
+            return
+            #else
             guard HKHealthStore.isHealthDataAvailable(),
                   let steps = HKObjectType.quantityType(forIdentifier: .stepCount),
                   let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
@@ -213,6 +221,7 @@ struct RunJeetWebView: UIViewRepresentable {
                 self.queryHealthActivityTotals()
                 self.queryHealthWorkouts()
             }
+            #endif
         }
 
         private func queryHealthSteps(completion: (() -> Void)? = nil) {
@@ -441,6 +450,10 @@ struct RunJeetWebView: UIViewRepresentable {
         }
 
         private func saveWorkout(_ payload: String) {
+            #if NURUN_FREE_SIDELOAD
+            sendWorkoutExportStatus(success: false, message: "Apple Health export is not available in this free-sideload build. Your NURUN activity remains saved locally.")
+            return
+            #else
             guard let data = payload.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let startMs = object["startTime"] as? Double,
@@ -478,6 +491,7 @@ struct RunJeetWebView: UIViewRepresentable {
                     self.sendWorkoutExportStatus(success: false, message: "Apple Health export failed: \(reason). Your NURUN activity remains saved locally.")
                 }
             }
+            #endif
         }
 
         private func sendSteps(_ count: Int, source: String) {
