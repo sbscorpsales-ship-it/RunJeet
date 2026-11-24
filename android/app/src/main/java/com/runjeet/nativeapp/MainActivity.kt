@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
         }
         RunJeetWebBridge.attach(webView)
         setContentView(webView)
-        webView.loadUrl("https://sbscorpsales-ship-it.github.io/RunJeet/")
+        webView.loadUrl("https://sbscorpsales-ship-it.github.io/RunJeet/nurun-preview/")
         requestNotificationPermissionThenConnect()
     }
 
