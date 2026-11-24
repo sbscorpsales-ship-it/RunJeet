@@ -10,7 +10,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const validDate = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || ""));
+  const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
   const millis = value => typeof value === "number" ? value : Date.parse(value);
   const sourceKey = value => String(value || "").trim();
 
