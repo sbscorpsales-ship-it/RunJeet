@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { reconcileDaily } = require("../src/iar/reconcile.js");
+const { reconcileDaily } = require("../../src/iar/reconcile.js");
 
 const base = {
   date: "2026-11-24",
